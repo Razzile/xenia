@@ -161,6 +161,7 @@ project("xenia-app")
       "xenia-gpu-d3d12",
       "xenia-hid-winkey",
       "xenia-hid-xinput",
+      "xenia-ui-d3d12",
     })
 
   filter("platforms:Windows")
