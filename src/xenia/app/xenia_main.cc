@@ -12,9 +12,32 @@
 //#include "xenia/base/logging.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/main.h"
-//#include "xenia/base/platform.h"
-//#include "xenia/base/profiling.h"
-//#include "xenia/base/threading.h"
+#include "xenia/base/profiling.h"
+#include "xenia/base/threading.h"
+#include "xenia/debug/ui/debug_window.h"
+#include "xenia/emulator.h"
+#include "xenia/ui/file_picker.h"
+#include "xenia/vfs/devices/host_path_device.h"
+
+// Available audio systems:
+#include "xenia/apu/nop/nop_audio_system.h"
+#if XE_PLATFORM_WIN32
+#include "xenia/apu/xaudio2/xaudio2_audio_system.h"
+#endif  // XE_PLATFORM_WIN32
+
+// Available graphics systems:
+#include "xenia/gpu/null/null_graphics_system.h"
+#include "xenia/gpu/vulkan/vulkan_graphics_system.h"
+#if XE_PLATFORM_WIN32
+#include "xenia/gpu/d3d12/d3d12_graphics_system.h"
+#endif  // XE_PLATFORM_WIN32
+
+// Available input drivers:
+#include "xenia/hid/nop/nop_hid.h"
+#if XE_PLATFORM_WIN32
+#include "xenia/hid/winkey/winkey_hid.h"
+#include "xenia/hid/xinput/xinput_hid.h"
+#endif  // XE_PLATFORM_WIN32
 
 #include "xenia/app/emulator_window.h"
 #include "xenia/ui/qt/main_window.h"
