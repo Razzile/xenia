@@ -9,6 +9,8 @@
 
 #include "xenia/gpu/trace_viewer.h"
 
+#include <gflags/gflags.h>
+
 #include <cinttypes>
 
 #include "third_party/half/include/half.hpp"
@@ -30,8 +32,7 @@
 #include "xenia/ui/window.h"
 #include "xenia/xbox.h"
 
-DEFINE_string(target_trace_file, "", "Specifies the trace file to load.",
-              "GPU");
+DEFINE_string(target_trace_file, "", "Specifies the trace file to load.");
 
 namespace xe {
 namespace gpu {
@@ -52,11 +53,11 @@ TraceViewer::~TraceViewer() = default;
 int TraceViewer::Main(const std::vector<std::wstring>& args) {
   // Grab path from the flag or unnamed argument.
   std::wstring path;
-  if (!cvars::target_trace_file.empty()) {
+  if (!FLAGS_target_trace_file.empty()) {
     // Passed as a named argument.
     // TODO(benvanik): find something better than gflags that supports
     // unicode.
-    path = xe::to_wstring(cvars::target_trace_file);
+    path = xe::to_wstring(FLAGS_target_trace_file);
   } else if (args.size() >= 2) {
     // Passed as an unnamed argument.
     path = args[1];
@@ -121,13 +122,10 @@ bool TraceViewer::Setup() {
   window_->Resize(1920, 1200);
 
   // Create the emulator but don't initialize so we can setup the window.
-  emulator_ = std::make_unique<Emulator>(L"", L"");
+  emulator_ = std::make_unique<Emulator>(L"");
   X_STATUS result =
-      emulator_->Setup(nullptr,
-                       [this](cpu::Processor*, kernel::KernelState*) {
-                         return CreateGraphicsSystem();
-                       },
-                       nullptr);
+      emulator_->Setup(window_.get(), nullptr,
+                       [this]() { return CreateGraphicsSystem(); }, nullptr);
   if (XFAILED(result)) {
     XELOGE("Failed to setup emulator: %.8X", result);
     return false;
@@ -992,7 +990,7 @@ static const char* kColorFormatNames[] = {
     /* 7  */ "k_16_16_16_16_FLOAT",
     /* 8  */ "unknown(8)",
     /* 9  */ "unknown(9)",
-    /* 10 */ "k_2_10_10_10_AS_10_10_10_10",
+    /* 10 */ "k_2_10_10_10_AS_16_16_16_16",
     /* 11 */ "unknown(11)",
     /* 12 */ "k_2_10_10_10_FLOAT_AS_16_16_16_16",
     /* 13 */ "unknown(13)",

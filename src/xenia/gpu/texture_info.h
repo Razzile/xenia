@@ -93,6 +93,10 @@ enum class TextureFormat : uint32_t {
 inline TextureFormat GetBaseFormat(TextureFormat texture_format) {
   // These formats are used for resampling textures / gamma control.
   switch (texture_format) {
+    case TextureFormat::k_16_16_EDRAM:
+      return TextureFormat::k_16_16;
+    case TextureFormat::k_16_16_16_16_EDRAM:
+      return TextureFormat::k_16_16_16_16;
     case TextureFormat::k_16_EXPAND:
       return TextureFormat::k_16_FLOAT;
     case TextureFormat::k_16_16_EXPAND:
@@ -100,6 +104,7 @@ inline TextureFormat GetBaseFormat(TextureFormat texture_format) {
     case TextureFormat::k_16_16_16_16_EXPAND:
       return TextureFormat::k_16_16_16_16_FLOAT;
     case TextureFormat::k_8_8_8_8_AS_16_16_16_16:
+    case TextureFormat::k_8_8_8_8_GAMMA_EDRAM:
       return TextureFormat::k_8_8_8_8;
     case TextureFormat::k_DXT1_AS_16_16_16_16:
       return TextureFormat::k_DXT1;
@@ -113,8 +118,6 @@ inline TextureFormat GetBaseFormat(TextureFormat texture_format) {
       return TextureFormat::k_10_11_11;
     case TextureFormat::k_11_11_10_AS_16_16_16_16:
       return TextureFormat::k_11_11_10;
-    case TextureFormat::k_8_8_8_8_GAMMA_EDRAM:
-      return TextureFormat::k_8_8_8_8;
     default:
       break;
   }
@@ -230,10 +233,8 @@ inline TextureFormat ColorRenderTargetToTextureFormat(
     case ColorRenderTargetFormat::k_8_8_8_8_GAMMA:
       return TextureFormat::k_8_8_8_8_GAMMA_EDRAM;
     case ColorRenderTargetFormat::k_2_10_10_10:
-    case ColorRenderTargetFormat::k_2_10_10_10_AS_10_10_10_10:
       return TextureFormat::k_2_10_10_10;
     case ColorRenderTargetFormat::k_2_10_10_10_FLOAT:
-    case ColorRenderTargetFormat::k_2_10_10_10_FLOAT_AS_16_16_16_16:
       return TextureFormat::k_2_10_10_10_FLOAT_EDRAM;
     case ColorRenderTargetFormat::k_16_16:
       return TextureFormat::k_16_16_EDRAM;
@@ -243,6 +244,10 @@ inline TextureFormat ColorRenderTargetToTextureFormat(
       return TextureFormat::k_16_16_FLOAT;
     case ColorRenderTargetFormat::k_16_16_16_16_FLOAT:
       return TextureFormat::k_16_16_16_16_FLOAT;
+    case ColorRenderTargetFormat::k_2_10_10_10_AS_16_16_16_16:
+      return TextureFormat::k_2_10_10_10_AS_16_16_16_16;
+    case ColorRenderTargetFormat::k_2_10_10_10_FLOAT_AS_16_16_16_16:
+      return TextureFormat::k_2_10_10_10_FLOAT_EDRAM;
     case ColorRenderTargetFormat::k_32_FLOAT:
       return TextureFormat::k_32_FLOAT;
     case ColorRenderTargetFormat::k_32_32_FLOAT:
