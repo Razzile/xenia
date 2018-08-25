@@ -205,7 +205,9 @@ solution("xenia")
     platforms({"Linux"})
   elseif os.istarget("windows") then
     platforms({"Windows"})
-    systemversion("10.0.10240.0")
+    -- Minimum version to support ID3D12GraphicsCommandList1 (for
+    -- SetSamplePositions).
+    systemversion("10.0.15063.0")
   end
   configurations({"Checked", "Debug", "Release"})
 
