@@ -1,6 +1,5 @@
 include("tools/build")
 require("third_party/premake-export-compile-commands/export-compile-commands")
-require("third_party/premake-qt/qt")
 
 location(build_root)
 targetdir(build_bin)
@@ -8,7 +7,7 @@ objdir(build_obj)
 
 -- Define an ARCH variable
 -- Only use this to enable architecture-specific functionality.
-if os.istarget("linux") then
+if os.is("linux") then
   ARCH = os.outputof("uname -p")
 else
   ARCH = "unknown"
@@ -67,11 +66,6 @@ filter("configurations:Debug")
 filter({"configurations:Debug", "platforms:Windows"})
   linkoptions({
     "/NODEFAULTLIB:MSVCRTD",
-  })
-
-filter({"configurations:Debug", "platforms:Linux"})
-  buildoptions({
-    "-g",
   })
 
 filter("configurations:Release")
@@ -134,17 +128,16 @@ filter({"platforms:Linux", "toolset:gcc"})
   end
 
 filter({"platforms:Linux", "language:C++", "toolset:clang"})
+  buildoptions({
+    "-std=c++14",
+    "-stdlib=libstdc++",
+  })
   links({
     "c++",
     "c++abi"
   })
   disablewarnings({
     "deprecated-register"
-  })
-filter({"platforms:Linux", "language:C++", "toolset:clang", "files:*.cc or *.cpp"})
-  buildoptions({
-    "-std=c++14",
-    "-stdlib=libstdc++",
   })
 
 filter("platforms:Windows")
@@ -181,6 +174,7 @@ filter("platforms:Windows")
     "wsock32",
     "ws2_32",
     "xinput",
+    "xaudio2",
     "glu32",
     "opengl32",
     "comctl32",
@@ -192,18 +186,42 @@ filter("platforms:Windows")
     "dxguid",
   })
 
--- Create scratch/ path
+-- Create scratch/ path and dummy flags file if needed.
 if not os.isdir("scratch") then
   os.mkdir("scratch")
+  local flags_file = io.open("scratch/flags.txt", "w")
+  flags_file:write("# Put flags, one on each line.\n")
+  flags_file:write("# Launch executables with --flags_file=scratch/flags.txt\n")
+  flags_file:write("\n")
+  flags_file:write("--cpu=x64\n")
+  flags_file:write("#--enable_haswell_instructions=false\n")
+  flags_file:write("\n")
+  flags_file:write("--debug\n")
+  flags_file:write("#--protect_zero=false\n")
+  flags_file:write("\n")
+  flags_file:write("#--mute\n")
+  flags_file:write("\n")
+  flags_file:write("--fast_stdout\n")
+  flags_file:write("#--flush_stdout=false\n")
+  flags_file:write("\n")
+  flags_file:write("#--vsync=false\n")
+  flags_file:write("#--gl_debug\n")
+  flags_file:write("#--gl_debug_output\n")
+  flags_file:write("#--gl_debug_output_synchronous\n")
+  flags_file:write("#--trace_gpu_prefix=scratch/gpu/gpu_trace_\n")
+  flags_file:write("#--trace_gpu_stream\n")
+  flags_file:write("#--disable_framebuffer_readback\n")
+  flags_file:write("\n")
+  flags_file:close()
 end
 
 solution("xenia")
   uuid("931ef4b0-6170-4f7a-aaf2-0fece7632747")
   startproject("xenia-app")
   architecture("x86_64")
-  if os.istarget("linux") then
+  if os.is("linux") then
     platforms({"Linux"})
-  elseif os.istarget("windows") then
+  elseif os.is("windows") then
     platforms({"Windows"})
     -- Minimum version to support ID3D12GraphicsCommandList1 (for
     -- SetSamplePositions).
@@ -212,15 +230,13 @@ solution("xenia")
   configurations({"Checked", "Debug", "Release"})
 
   -- Include third party files first so they don't have to deal with gflags.
-  include("third_party/aes_128.lua")
   include("third_party/capstone.lua")
-  include("third_party/cpptoml.lua")
-  include("third_party/cxxopts.lua")
+  include("third_party/dxbc.lua")
+  include("third_party/gflags.lua")
   include("third_party/glew.lua")
   include("third_party/glslang-spirv.lua")
   include("third_party/imgui.lua")
   include("third_party/libav.lua")
-  include("third_party/mspack.lua")
   include("third_party/snappy.lua")
   include("third_party/spirv-tools.lua")
   include("third_party/volk.lua")
@@ -242,12 +258,11 @@ solution("xenia")
   include("src/xenia/hid/nop")
   include("src/xenia/kernel")
   include("src/xenia/ui")
-  include("src/xenia/ui/qt")
   include("src/xenia/ui/spirv")
   include("src/xenia/ui/vulkan")
   include("src/xenia/vfs")
 
-  if os.istarget("windows") then
+  if os.is("windows") then
     include("src/xenia/apu/xaudio2")
     include("src/xenia/gpu/d3d12")
     include("src/xenia/hid/winkey")
