@@ -1895,7 +1895,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
       system_constants_.edram_rt_flags[i] = rt_flags;
       if (system_constants_color_formats_[i] != color_format) {
         dirty = true;
-        uint32_t color_mask = UINT32_MAX, alpha_mask = UINT32_MAX;
         // Initialize min/max to Infinity.
         uint32_t color_min = 0xFF800000u, alpha_min = 0xFF800000u;
         uint32_t color_max = 0x7F800000u, alpha_max = 0x7F800000u;
@@ -1911,7 +1910,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
             system_constants_.edram_rt_pack_offset_low[i][1] = 8;
             system_constants_.edram_rt_pack_offset_low[i][2] = 16;
             system_constants_.edram_rt_pack_offset_low[i][3] = 24;
-            color_mask = alpha_mask = 255;
             color_min = alpha_min = 0;
             color_max = alpha_max = 0x3F800000;
             color_store_scale = alpha_store_scale = 255.0f;
@@ -1926,8 +1924,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
             system_constants_.edram_rt_pack_offset_low[i][1] = 10;
             system_constants_.edram_rt_pack_offset_low[i][2] = 20;
             system_constants_.edram_rt_pack_offset_low[i][3] = 30;
-            color_mask = 1023;
-            alpha_mask = 3;
             color_min = alpha_min = 0;
             color_max = alpha_max = 0x3F800000;
             // 1023.0.
@@ -1944,8 +1940,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
             system_constants_.edram_rt_pack_offset_low[i][1] = 10;
             system_constants_.edram_rt_pack_offset_low[i][2] = 20;
             system_constants_.edram_rt_pack_offset_low[i][3] = 30;
-            color_mask = 1023;
-            alpha_mask = 3;
             color_min = alpha_min = 0;
             // 31.875.
             color_max = 0x41FF0000;
@@ -1963,7 +1957,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
             system_constants_.edram_rt_pack_offset_low[i][2] = 0;
             system_constants_.edram_rt_pack_offset_low[i][3] = 0;
             // TODO(Triang3l): 64bpp variant.
-            // Color and alpha mask UINT32_MAX because the format is signed.
             // -32.0.
             color_min = alpha_min = 0xC2000000u;
             // 32.0.
@@ -1981,7 +1974,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
             system_constants_.edram_rt_pack_offset_low[i][2] = 0;
             system_constants_.edram_rt_pack_offset_low[i][3] = 0;
             // TODO(Triang3l): 64bpp variant.
-            color_mask = alpha_mask = 0xFFFF;
             break;
           case ColorRenderTargetFormat::k_32_FLOAT:
           case ColorRenderTargetFormat::k_32_32_FLOAT:
@@ -2001,12 +1993,6 @@ void D3D12CommandProcessor::UpdateSystemConstantValues(
         }
         uint32_t rt_pair_index = i >> 1;
         uint32_t rt_pair_comp = (i & 1) << 1;
-        system_constants_
-            .edram_load_mask_rt01_rt23[rt_pair_index][rt_pair_comp] =
-            color_mask;
-        system_constants_
-            .edram_load_mask_rt01_rt23[rt_pair_index][rt_pair_comp + 1] =
-            alpha_mask;
         system_constants_
             .edram_store_min_rt01_rt23[rt_pair_index][rt_pair_comp] = color_min;
         system_constants_
