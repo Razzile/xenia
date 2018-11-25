@@ -46,3 +46,6 @@
 [submodule "third_party/aes_128"]
 	path = third_party/aes_128
 	url = https://github.com/openluopworld/aes_128.git
+[submodule "third_party/cpptoml"]
+	path = third_party/cpptoml
+	url = https://github.com/skystrife/cpptoml
