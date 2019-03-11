@@ -7,10 +7,11 @@
  ******************************************************************************
  */
 
-#include "xenia/app/library/game_library.h"
-//#include "xenia/base/debugging.h"
-//#include "xenia/base/logging.h"
-#include "xenia/base/cvar.h"
+#include <gflags/gflags.h>
+
+#include "xenia/app/emulator_window.h"
+#include "xenia/base/debugging.h"
+#include "xenia/base/logging.h"
 #include "xenia/base/main.h"
 #include "xenia/base/profiling.h"
 #include "xenia/base/threading.h"
@@ -28,9 +29,6 @@
 // Available graphics systems:
 #include "xenia/gpu/null/null_graphics_system.h"
 #include "xenia/gpu/vulkan/vulkan_graphics_system.h"
-#if XE_PLATFORM_WIN32
-#include "xenia/gpu/d3d12/d3d12_graphics_system.h"
-#endif  // XE_PLATFORM_WIN32
 
 // Available input drivers:
 #include "xenia/hid/nop/nop_hid.h"
@@ -39,89 +37,150 @@
 #include "xenia/hid/xinput/xinput_hid.h"
 #endif  // XE_PLATFORM_WIN32
 
-#include "xenia/app/emulator_window.h"
-#include "xenia/ui/qt/main_window.h"
+DEFINE_string(apu, "any", "Audio system. Use: [any, nop, xaudio2]");
+DEFINE_string(gpu, "any", "Graphics system. Use: [any, vulkan, null]");
+DEFINE_string(hid, "any", "Input system. Use: [any, nop, winkey, xinput]");
 
-#include <QApplication>
-#include <QFontDatabase>
-#include <QtPlugin>
+DEFINE_string(target, "", "Specifies the target .xex or .iso to execute.");
+DEFINE_bool(fullscreen, false, "Toggles fullscreen");
 
-#include "xenia/base/logging.h"
-#include "xenia/config.h"
+DEFINE_string(content_root, "", "Root path for content (save/etc) storage.");
 
-#if XE_PLATFORM_WIN32 && QT_STATIC
-Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
-#endif
-
-DEFINE_bool(mount_scratch, false, "Enable scratch mount", "General");
-DEFINE_bool(mount_cache, false, "Enable cache mount", "General");
-DEFINE_bool(show_debug_tab, true, "Show the debug tab in the Qt UI", "General");
-DEFINE_string(
-    storage_root, "",
-    "Root path for persistent internal data storage (config, etc.), or empty "
-    "to use the path preferred for the OS, such as the documents folder, or "
-    "the emulator executable directory if portable.txt is present in it.",
-    "Storage");
-DEFINE_string(
-    content_root, "",
-    "Root path for guest content storage (saves, etc.), or empty to use the "
-    "content folder under the storage root.",
-    "Storage");
+DEFINE_bool(mount_scratch, false, "Enable scratch mount");
+DEFINE_bool(mount_cache, false, "Enable cache mount");
 
 namespace xe {
 namespace app {
 
-int xenia_main(const std::vector<std::wstring>& args) {
-  /*Profiler::Initialize();
-  Profiler::ThreadEnter("main");*/
+std::unique_ptr<apu::AudioSystem> CreateAudioSystem(cpu::Processor* processor) {
+  if (FLAGS_apu.compare("nop") == 0) {
+    return apu::nop::NopAudioSystem::Create(processor);
+#if XE_PLATFORM_WIN32
+  } else if (FLAGS_apu.compare("xaudio2") == 0) {
+    return apu::xaudio2::XAudio2AudioSystem::Create(processor);
+#endif  // XE_PLATFORM_WIN32
+  } else {
+    // Create best available.
+    std::unique_ptr<apu::AudioSystem> best;
 
-  // auto emulator = std::make_unique<xe::Emulator>(L"");
+#if XE_PLATFORM_WIN32
+    best = apu::xaudio2::XAudio2AudioSystem::Create(processor);
+    if (best) {
+      return best;
+    }
+#endif  // XE_PLATFORM_WIN32
 
-  qputenv("QT_SCALE_FACTOR", "0.75");
+    // Fallback to nop.
+    return apu::nop::NopAudioSystem::Create(processor);
+  }
+}
 
-  // Start Qt
-  QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-  QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-  QCoreApplication::setApplicationName("Xenia");
-  QCoreApplication::setOrganizationName(
-      "Xenia Xbox 360 Emulator Research Project");
-  QCoreApplication::setOrganizationDomain("https://xenia.jp");
+std::unique_ptr<gpu::GraphicsSystem> CreateGraphicsSystem() {
+  if (FLAGS_gpu.compare("vulkan") == 0) {
+    return std::unique_ptr<gpu::GraphicsSystem>(
+        new xe::gpu::vulkan::VulkanGraphicsSystem());
+  } else if (FLAGS_gpu.compare("null") == 0) {
+    return std::unique_ptr<gpu::GraphicsSystem>(
+        new xe::gpu::null::NullGraphicsSystem());
+  } else {
+    // Create best available.
+    std::unique_ptr<gpu::GraphicsSystem> best;
 
-  std::wstring storage_root = xe::to_wstring(cvars::storage_root);
-  if (storage_root.empty()) {
-    storage_root = xe::filesystem::GetExecutableFolder();
-    if (!xe::filesystem::PathExists(xe::format_string(L"%S/%S", storage_root.c_str(), "portable.txt"))) {
-      storage_root = xe::filesystem::GetUserFolder();
-#if defined(XE_PLATFORM_WIN32) || defined(XE_PLATFORM_LINUX)
-      storage_root = storage_root + L"/Xenia";
-#else
-#warning Unhandled platform for the data root.
-      storage_root = storage_root + L"/Xenia";
-#endif
+    best = std::unique_ptr<gpu::GraphicsSystem>(
+        new xe::gpu::vulkan::VulkanGraphicsSystem());
+    if (best) {
+      return best;
+    }
+
+    // Nothing!
+    return nullptr;
+  }
+}
+
+std::vector<std::unique_ptr<hid::InputDriver>> CreateInputDrivers(
+    ui::Window* window) {
+  std::vector<std::unique_ptr<hid::InputDriver>> drivers;
+  if (FLAGS_hid.compare("nop") == 0) {
+    drivers.emplace_back(xe::hid::nop::Create(window));
+#if XE_PLATFORM_WIN32
+  } else if (FLAGS_hid.compare("winkey") == 0) {
+    drivers.emplace_back(xe::hid::winkey::Create(window));
+  } else if (FLAGS_hid.compare("xinput") == 0) {
+    drivers.emplace_back(xe::hid::xinput::Create(window));
+#endif  // XE_PLATFORM_WIN32
+  } else {
+#if XE_PLATFORM_WIN32
+    auto xinput_driver = xe::hid::xinput::Create(window);
+    if (xinput_driver) {
+      drivers.emplace_back(std::move(xinput_driver));
+    }
+    auto winkey_driver = xe::hid::winkey::Create(window);
+    if (winkey_driver) {
+      drivers.emplace_back(std::move(winkey_driver));
+    }
+#endif  // XE_PLATFORM_WIN32
+  }
+  for (auto it = drivers.begin(); it != drivers.end();) {
+    if (XFAILED((*it)->Setup())) {
+      it = drivers.erase(it);
+    } else {
+      ++it;
     }
   }
-  storage_root = xe::fix_path_separators(storage_root);
-  XELOGI("Storage root: %S", storage_root.c_str());
+  if (drivers.empty()) {
+    // Fallback to nop if none created.
+    drivers.emplace_back(xe::hid::nop::Create(window));
+  }
+  return drivers;
+}
 
-  config::SetupConfig(storage_root);
+int xenia_main(const std::vector<std::wstring>& args) {
+  Profiler::Initialize();
+  Profiler::ThreadEnter("main");
 
-  int argc = 1;
-  char* argv[] = {"xenia", nullptr};
-  QApplication app(argc, argv);
+  // Figure out where content should go.
+  std::wstring content_root;
+  if (!FLAGS_content_root.empty()) {
+    content_root = xe::to_wstring(FLAGS_content_root);
+  } else {
+    auto base_path = xe::filesystem::GetExecutableFolder();
+    base_path = xe::to_absolute_path(base_path);
 
-  // Load Fonts
-  QFontDatabase fonts;
-  fonts.addApplicationFont(":/resources/fonts/SegMDL2.ttf");
-  fonts.addApplicationFont(":/resources/fonts/segoeui.ttf");
-  fonts.addApplicationFont(":/resources/fonts/segoeuisb.ttf");
-  QApplication::setFont(QFont("Segoe UI"));
+    auto portable_path = xe::join_paths(base_path, L"portable.txt");
+    if (xe::filesystem::PathExists(portable_path)) {
+      content_root = xe::join_paths(base_path, L"content");
+    } else {
+      content_root = xe::filesystem::GetUserFolder();
+#if defined(XE_PLATFORM_WIN32)
+      content_root = xe::join_paths(content_root, L"Xenia");
+#elif defined(XE_PLATFORM_LINUX)
+      content_root = xe::join_paths(content_root, L"Xenia");
+#else
+#warning Unhandled platform for content root.
+      content_root = xe::join_paths(content_root, L"Xenia");
+#endif
+      content_root = xe::join_paths(content_root, L"content");
+    }
+  }
+  content_root = xe::to_absolute_path(content_root);
+  XELOGI("Content root: %S", content_root.c_str());
 
-  // EmulatorWindow main_wnd;
-  ui::qt::MainWindow main_wnd;
-  main_wnd.setWindowIcon(QIcon(":/resources/graphics/icon.ico"));
-  main_wnd.resize(1280, 720);
+  // Create the emulator but don't initialize so we can setup the window.
+  auto emulator = std::make_unique<Emulator>(L"", content_root);
 
-  /*
+  // Main emulator display window.
+  auto emulator_window = EmulatorWindow::Create(emulator.get());
+
+  // Setup and initialize all subsystems. If we can't do something
+  // (unsupported system, memory issues, etc) this will fail early.
+  X_STATUS result =
+      emulator->Setup(emulator_window->window(), CreateAudioSystem,
+                      CreateGraphicsSystem, CreateInputDrivers);
+  if (XFAILED(result)) {
+    XELOGE("Failed to setup emulator: %.8X", result);
+    return 1;
+  }
+
   if (FLAGS_mount_scratch) {
     auto scratch_device = std::make_unique<xe::vfs::HostPathDevice>(
         "\\SCRATCH", L"scratch", false);
@@ -135,10 +194,6 @@ int xenia_main(const std::vector<std::wstring>& args) {
       }
     }
   }
-
-
-
-
 
   if (FLAGS_mount_cache) {
     auto cache0_device =
@@ -188,19 +243,82 @@ int xenia_main(const std::vector<std::wstring>& args) {
           return debug_window.get();
         });
   }
-  */
 
-  main_wnd.show();
-  // if (args.size() >= 2) {
-  //  // Launch the path passed in args[1].
-  //  main_wnd.Launch(args[1]);
-  //}
+  auto evt = xe::threading::Event::CreateAutoResetEvent(false);
+  emulator->on_launch.AddListener([&]() {
+    emulator_window->UpdateTitle();
+    evt->Set();
+  });
 
-  int rc = app.exec();
+  emulator_window->window()->on_closing.AddListener([&](ui::UIEvent* e) {
+    // This needs to shut down before the graphics context.
+    Profiler::Shutdown();
+  });
 
-  /*Profiler::Dump();
-  Profiler::Shutdown();*/
-  return rc;
+  bool exiting = false;
+  emulator_window->loop()->on_quit.AddListener([&](ui::UIEvent* e) {
+    exiting = true;
+    evt->Set();
+
+    // TODO(DrChat): Remove this code and do a proper exit.
+    XELOGI("Cheap-skate exit!");
+    exit(0);
+  });
+
+  // Enable the main menu now that the emulator is properly loaded
+  emulator_window->window()->EnableMainMenu();
+
+  // Grab path from the flag or unnamed argument.
+  std::wstring path;
+  if (!FLAGS_target.empty() || args.size() >= 2) {
+    if (!FLAGS_target.empty()) {
+      // Passed as a named argument.
+      // TODO(benvanik): find something better than gflags that supports
+      // unicode.
+      path = xe::to_wstring(FLAGS_target);
+    } else {
+      // Passed as an unnamed argument.
+      path = args[1];
+    }
+  }
+
+  // Toggles fullscreen
+  if (FLAGS_fullscreen) emulator_window->ToggleFullscreen();
+
+  if (!path.empty()) {
+    // Normalize the path and make absolute.
+    std::wstring abs_path = xe::to_absolute_path(path);
+    result = emulator->LaunchPath(abs_path);
+    if (XFAILED(result)) {
+      xe::FatalError("Failed to launch target: %.8X", result);
+      emulator.reset();
+      emulator_window.reset();
+      return 1;
+    }
+  }
+
+  // Now, we're going to use the main thread to drive events related to
+  // emulation.
+  while (!exiting) {
+    xe::threading::Wait(evt.get(), false);
+
+    while (true) {
+      emulator->WaitUntilExit();
+      if (emulator->TitleRequested()) {
+        emulator->LaunchNextTitle();
+      } else {
+        break;
+      }
+    }
+  }
+
+  debug_window.reset();
+  emulator.reset();
+
+  Profiler::Dump();
+  Profiler::Shutdown();
+  emulator_window.reset();
+  return 0;
 }
 
 }  // namespace app
