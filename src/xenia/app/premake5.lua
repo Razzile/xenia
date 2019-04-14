@@ -9,6 +9,7 @@ project("xenia-app")
   targetname("xenia")
   language("C++")
   links({
+    "aes_128",
     "capstone",
     "gflags",
     "glew",
