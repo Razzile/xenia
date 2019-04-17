@@ -11,7 +11,6 @@ project("xenia-app")
   links({
     "aes_128",
     "capstone",
-    "gflags",
     "glew",
     "glslang-spirv",
     "imgui",
@@ -125,9 +124,7 @@ project("xenia-app")
     "XBYAK_NO_OP_NAMES",
     "XBYAK_ENABLE_OMITTED_OPERAND",
   })
-  includedirs({
-    project_root.."/third_party/gflags/src",
-  })
+  local_platform_files()
   recursive_platform_files()
   files({
     "xenia_main.cc",
@@ -172,7 +169,6 @@ project("xenia-app")
     if not os.isfile(user_file) then
       debugdir(project_root)
       debugargs({
-        "--flagfile=scratch/flags.txt",
       })
       debugenvs({
         "PATH=%{cfg.qtpath}/bin",
