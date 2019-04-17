@@ -2,7 +2,6 @@
 #define XENIA_CVAR_H_
 #include <map>
 #include <string>
-
 #include "cpptoml/include/cpptoml.h"
 #include "cxxopts/include/cxxopts.hpp"
 #include "xenia/base/string_util.h"
@@ -29,8 +28,6 @@ class IConfigVar : virtual public ICommandVar {
 template <class T>
 class CommandVar : virtual public ICommandVar {
  public:
-  using type = T;
-
   CommandVar<T>(const char* name, T* defaultValue, const char* description);
   std::string GetName() override;
   std::string GetDescription() override;
@@ -194,12 +191,12 @@ inline void AddCommandVar(ICommandVar* cv) {
 void ParseLaunchArguments(int argc, char** argv);
 
 template <typename T>
-ConfigVar<T>* define_configvar(const char* name, T* defaultValue,
-                               const char* description, const char* category) {
-  ConfigVar<T>* cfgVar =
+T* define_configvar(const char* name, T* defaultValue, const char* description,
+                    const char* category) {
+  IConfigVar* cfgVar =
       new ConfigVar<T>(name, defaultValue, description, category);
   AddConfigVar(cfgVar);
-  return cfgVar;
+  return defaultValue;
 }
 
 template <typename T>
@@ -225,8 +222,10 @@ T* define_cmdvar(const char* name, T* defaultValue, const char* description) {
 
 #define DEFINE_CVar(name, defaultValue, description, category, type)      \
   namespace cvars {                                                       \
-    type name = defaultValue;                                               \
-    cvar::ConfigVar<type>* cv_##name =                             \
+  type name = defaultValue;                                               \
+  }                                                                       \
+  namespace cv {                                                          \
+  static auto cv_##name =                                                 \
       cvar::define_configvar(#name, &cvars::name, description, category); \
   }
 
@@ -234,7 +233,9 @@ T* define_cmdvar(const char* name, T* defaultValue, const char* description) {
 #define CmdVar(name, defaultValue, description)              \
   namespace cvars {                                          \
   std::string name = defaultValue;                           \
-  static auto cv_##name =                                  \
+  }                                                          \
+  namespace cv {                                             \
+  static auto cv_##name =                                    \
       cvar::define_cmdvar(#name, &cvars::name, description); \
   }
 
@@ -248,10 +249,9 @@ T* define_cmdvar(const char* name, T* defaultValue, const char* description) {
 
 #define DECLARE_uint64(name) DECLARE_CVar(name, uint64_t)
 
-#define DECLARE_CVar(name, type)           \
-  namespace cvars {                        \
-  extern type name;                        \
-  extern cvar::ConfigVar<type>* cv_##name; \
+#define DECLARE_CVar(name, type) \
+  namespace cvars {              \
+  extern type name;              \
   }
 
 }  // namespace cvar
