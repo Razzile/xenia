@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 
+#include <vector>
 #include "xenia/ui/vulkan/vulkan.h"
 
 namespace xe {
