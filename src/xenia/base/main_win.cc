@@ -89,6 +89,7 @@ int Main() {
   auto entry_info = xe::GetEntryInfo();
 
   // Convert command line to an argv-like format so we can share code/use
+  // gflags.
   auto command_line = GetCommandLineW();
   int argc;
   wchar_t** argv = CommandLineToArgvW(command_line, &argc);
@@ -96,7 +97,7 @@ int Main() {
     return 1;
   }
 
-  // Convert all args to narrow, as cxxopts doesn't support wchar.
+  // Convert all args to narrow, as gflags doesn't support wchar.
   int argca = argc;
   char** argva = reinterpret_cast<char**>(alloca(sizeof(char*) * argca));
   for (int n = 0; n < argca; n++) {
@@ -120,7 +121,7 @@ int Main() {
   // Setup COM on the main thread.
   // NOTE: this may fail if COM has already been initialized - that's OK.
 #pragma warning(suppress : 6031)
-  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
   // Initialize logging. Needs parsed FLAGS.
   xe::InitializeLogging(entry_info.name);

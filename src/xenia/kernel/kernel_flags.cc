@@ -8,7 +8,7 @@
  */
 
 #include "xenia/kernel/kernel_flags.h"
-//
+
 DEFINE_bool(headless, false,
             "Don't display any UI, using defaults for prompts as needed.",
             "Other");
