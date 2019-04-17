@@ -18,6 +18,15 @@
 
 #include <QVulkanWindow>
 
+#include "third_party/imgui/imgui.h"
+#include "xenia/base/clock.h"
+#include "xenia/base/debugging.h"
+#include "xenia/base/logging.h"
+#include "xenia/base/platform.h"
+#include "xenia/base/profiling.h"
+#include "xenia/base/threading.h"
+#include "xenia/emulator.h"
+#include "xenia/gpu/graphics_system.h"
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, xaudio2]");
 DEFINE_string(gpu, "any", "Graphics system. Use: [any, vulkan, null]");
 DEFINE_string(hid, "any", "Input system. Use: [any, nop, winkey, xinput]");
