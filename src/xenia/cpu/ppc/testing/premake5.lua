@@ -11,21 +11,30 @@ project("xenia-cpu-ppc-tests")
     "xenia-cpu-backend-x64",
     "xenia-cpu",
     "xenia-base",
+    "gflags",
     "capstone", -- cpu-backend-x64
     "mspack",
   })
   files({
     "ppc_testing_main.cc",
     "../../../base/main_"..platform_suffix..".cc",
+    "../../../base/main_entrypoint_"..platform_suffix..".cc",
   })
   files({
     "*.s",
   })
+  includedirs({
+    project_root.."/third_party/gflags/src",
+  })
+
   filter("files:*.s")
     flags({"ExcludeFromBuild"})
+  filter("files:../../../base/main_entrypoint_"..platform_suffix..".cc")
+    vectorextensions("IA32")  -- Disable AVX so our AVX check/error can happen.
   filter("platforms:Windows")
     debugdir(project_root)
     debugargs({
+      "--flagfile=scratch/flags.txt",
       "2>&1",
       "1>scratch/stdout-testing.txt",
     })
@@ -41,18 +50,20 @@ project("xenia-cpu-ppc-nativetests")
   language("C++")
   links({
     "xenia-base",
+    "gflags",
   })
   files({
     "ppc_testing_native_main.cc",
     "../../../base/main_"..platform_suffix..".cc",
+    "../../../base/main_entrypoint_"..platform_suffix..".cc",
   })
   files({
     "instr_*.s",
     "seq_*.s",
   })
-  filter("files:instr_*.s", "files:seq_*.s")
-    flags({"ExcludeFromBuild"})
-  filter({})
+  includedirs({
+    project_root.."/third_party/gflags/src",
+  })
   buildoptions({
     "-Wa,-mregnames",  -- Tell GAS to accept register names.
   })
@@ -60,5 +71,10 @@ project("xenia-cpu-ppc-nativetests")
   files({
     "ppc_testing_native_thunks.s",
   })
+
+  filter("files:instr_*.s", "files:seq_*.s")
+    flags({"ExcludeFromBuild"})
+  filter("files:../../../base/main_entrypoint_"..platform_suffix..".cc")
+    vectorextensions("IA32")  -- Disable AVX so our AVX check/error can happen.
 
 end

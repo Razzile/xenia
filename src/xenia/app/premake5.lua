@@ -8,14 +8,15 @@ project("xenia-app")
   targetname("xenia")
   language("C++")
   links({
+    "aes_128",
     "capstone",
-    "dxbc",
     "gflags",
     "glew",
     "glslang-spirv",
     "imgui",
     "libavcodec",
     "libavutil",
+    "mspack",
     "snappy",
     "spirv-tools",
     "volk",
@@ -39,6 +40,8 @@ project("xenia-app")
     "xxhash",
   })
   defines({
+    "XBYAK_NO_OP_NAMES",
+    "XBYAK_ENABLE_OMITTED_OPERAND",
   })
   includedirs({
     project_root.."/third_party/gflags/src",
@@ -47,14 +50,20 @@ project("xenia-app")
   files({
     "xenia_main.cc",
     "../base/main_"..platform_suffix..".cc",
+    "../base/main_entrypoint_"..platform_suffix..".cc",
   })
+
+  resincludedirs({
+    project_root,
+  })
+
   filter("platforms:Windows")
     files({
       "main_resources.rc",
     })
-  resincludedirs({
-    project_root,
-  })
+
+  filter("files:../base/main_entrypoint_"..platform_suffix..".cc")
+    vectorextensions("IA32")  -- Disable AVX so our AVX check/error can happen.
 
   filter("platforms:Linux")
     links({
@@ -68,10 +77,8 @@ project("xenia-app")
   filter("platforms:Windows")
     links({
       "xenia-apu-xaudio2",
-      "xenia-gpu-d3d12",
       "xenia-hid-winkey",
       "xenia-hid-xinput",
-      "xenia-ui-d3d12",
     })
 
   filter("platforms:Windows")
