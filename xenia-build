@@ -9,7 +9,6 @@ Run with --help or no arguments for possible commands.
 from __future__ import print_function
 
 import argparse
-import json
 import os
 import re
 import shutil
@@ -90,42 +89,31 @@ def import_vs_environment():
     interesting environment variables into os.environ.
 
     Returns:
-      A version such as 2015 or None if no installation is found.
+      A version such as 2015 or None if no VS is found.
     """
     version = 0
-    install_path = None
-    env_tool_args = None
 
-    vswhere = subprocess.check_output('third_party/vswhere/vswhere.exe -version "[15,)" -latest -format json', shell=False, universal_newlines=True)
-    if vswhere:
-        vswhere = json.loads(vswhere)
-    if vswhere and len(vswhere) > 0:
-        version = int(vswhere[0].get("catalog", {}).get("productLineVersion", 2017))
-        install_path = vswhere[0].get("installationPath", None)
+    candidate_path = subprocess.check_output('third_party/vswhere/vswhere.exe -version "[15,)" -latest -format value -property installationPath', shell=False, universal_newlines=True)
+    candidate_path = candidate_path.strip()
 
-    if version < 2017:
-        if 'VS140COMNTOOLS' in os.environ:
-            version = 2015
-            vcvars_path = os.environ['VS140COMNTOOLS']
-            vcvars_path = os.path.join(tools_path, '..\\..\\vc\\vcvarsall.bat')
-            env_tool_args = [vcvars_path, 'x64', '&&', 'set']
-    else:
-        vcvars_path = os.path.join(install_path, 'VC\\Auxiliary\\Build\\vcvarsall.bat')
-        if os.path.isfile(vcvars_path) and os.access(vcvars_path, os.X_OK):
-            env_tool_args = [vcvars_path, 'x64', '&&', 'set']
-        else:
-            vsdevcmd_path = os.path.join(install_path, 'Common7\\Tools\\VsDevCmd.bat')
-            env_tool_args = [vsdevcmd_path, '-arch=amd64', '-host_arch=amd64']
-
+    tools_path = ''
+    if candidate_path:
+        tools_path = os.path.join(candidate_path, 'vc\\auxiliary\\build\\vcvarsall.bat')
+        if os.path.isfile(tools_path) and os.access(tools_path, os.X_OK):
+            version = subprocess.check_output('third_party/vswhere/vswhere.exe -version "[15,)" -latest -format value -property catalog_productLineVersion', shell=False, universal_newlines=True)
+            version = version.strip()
+            if version:
+                version = int(version)
+            else:
+                version = 2017
+    if version == 0 and 'VS140COMNTOOLS' in os.environ:
+        version = 2015
+        tools_path = os.environ['VS140COMNTOOLS']
+        tools_path = os.path.join(tools_path, '..\\..\\vc\\vcvarsall.bat')
     if version == 0:
         return None
 
-    import_subprocess_environment(env_tool_args)
-    os.environ['VSVERSION'] = str(version)
-    return version
-
-
-def import_subprocess_environment(args):
+    args = [tools_path, 'x64', '&&', 'set']
     popen = subprocess.Popen(
         args, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
     variables, _ = popen.communicate()
@@ -149,6 +137,10 @@ def import_subprocess_environment(args):
                     setting = os.path.dirname(sys.executable) + os.pathsep + setting
                 os.environ[var.upper()] = setting
                 break
+
+    os.environ['VSVERSION'] = str(version)
+    return version
+
 
 def has_bin(binary):
     """Checks whether the given binary is present.
@@ -436,7 +428,6 @@ def discover_commands(subparsers):
         }
     if sys.platform == 'win32':
         commands['devenv'] = DevenvCommand(subparsers)
-        commands['buildhlsl'] = BuildHlslCommand(subparsers)
     return commands
 
 
@@ -598,7 +589,7 @@ class BaseBuildCommand(Command):
             '--no_premake', action='store_true',
             help='Skips running premake before building.')
         self.parser.add_argument(
-            '-j', default=4, type=int, help='Number of parallel threads')
+            '-j', default=0, type=int, help='Number of parallel threads')
 
     def execute(self, args, pass_args, cwd):
         if not args['no_premake']:
@@ -759,95 +750,6 @@ class GenSpirvCommand(Command):
 
         if any_errors:
             print('ERROR: failed to build one or more SPIR-V files.')
-            return 1
-
-        return 0
-
-
-class BuildHlslCommand(Command):
-    """'buildhlsl' command."""
-
-    def __init__(self, subparsers, *args, **kwargs):
-        super(BuildHlslCommand, self).__init__(
-            subparsers,
-            name='buildhlsl',
-            help_short='Generates Direct3D shader binaries and header files.',
-            help_long='''
-            Generates the .cso/.h binaries under src/xenia/*/d3d12/shaders/dxbc/.
-            Run after modifying any .hs/vs/ds/gs/ps/cs.hlsl files.
-            ''',
-            *args, **kwargs)
-
-    def execute(self, args, pass_args, cwd):
-        print('Building Direct3D shaders...')
-        print('')
-
-        windows_sdk_bin_path = os.path.join(os.environ['ProgramFiles(x86)'],
-                                            'Windows Kits/10/bin/x64')
-        fxc = os.path.join(windows_sdk_bin_path, 'fxc')
-
-        # Ensure we have the tools.
-        if not os.path.exists(windows_sdk_bin_path):
-            print('ERROR: could not find Windows 10 SDK binaries')
-            return 1
-        elif not has_bin(fxc):
-            print('ERROR: could not find fxc')
-            return 1
-
-        src_files = [os.path.join(root, name)
-                     for root, dirs, files in os.walk('src')
-                     for name in files
-                     if (name.endswith('.hs.hlsl') or
-                         name.endswith('.vs.hlsl') or
-                         name.endswith('.ds.hlsl') or
-                         name.endswith('.gs.hlsl') or
-                         name.endswith('.ps.hlsl') or
-                         name.endswith('.cs.hlsl'))]
-
-        # TODO(Triang3l): Handle any_errors.
-        any_errors = False
-        for src_file in src_files:
-            print('- %s' % (src_file))
-            src_name = os.path.splitext(os.path.basename(src_file))[0]
-            identifier = os.path.basename(src_file)[:-5].replace('.', '_')
-
-            bin_path = os.path.join(os.path.dirname(src_file), 'dxbc')
-            if not os.path.exists(bin_path):
-                os.mkdir(bin_path)
-            cso_file = os.path.join(bin_path, identifier) + '.cso'
-            txt_file = os.path.join(bin_path, identifier) + '.txt'
-            h_file = os.path.join(bin_path, identifier) + '.h'
-
-            # HLSL source -> .cso binary and DXBC disassembly.
-            shell_call([
-                fxc,
-                '/nologo',
-                '/T', identifier[-2:] + '_5_1',
-                '/Fo', cso_file,
-                '/Fc', txt_file,
-                src_file,
-                ])
-
-            # bin2c so we get a header file we can compile in.
-            with open(h_file, 'w') as out_file:
-                out_file.write('// generated from `xb buildhlsl`\n')
-                out_file.write('// source: %s\n' % os.path.basename(src_file))
-                out_file.write('const uint8_t %s[] = {' % (identifier))
-                with open(cso_file, 'rb') as in_file:
-                    index = 0
-                    c = in_file.read(1)
-                    while len(c) != 0:
-                        if index % 12 == 0:
-                            out_file.write('\n    ')
-                        else:
-                            out_file.write(' ')
-                        index += 1
-                        out_file.write('0x%02X,' % ord(c))
-                        c = in_file.read(1)
-                out_file.write('\n};\n')
-
-        if any_errors:
-            print('ERROR: failed to build one or more shaders.')
             return 1
 
         return 0
@@ -1048,7 +950,7 @@ class GpuTestCommand(BaseBuildCommand):
 
         # The test executables that will be built and run.
         test_targets = args['target'] or [
-            'xenia-gpu-vulkan-trace-dump',
+            'xenia-gpu-gl4-trace-dump',
             ]
         args['target'] = test_targets
 
