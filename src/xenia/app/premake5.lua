@@ -132,21 +132,23 @@ project("xenia-app")
   files({
     "xenia_main.cc",
     "../base/main_"..platform_suffix..".cc",
+    "../base/main_init_"..platform_suffix..".cc",
 
     -- Qt files
     "*.qrc",
   })
 
-  filter("files:xenia_main.cc or ../base/main_"..platform_suffix..".cc")
-    vectorextensions("IA32")  -- Disable AVX for main_win.cc so our AVX check/error can happen.
+  resincludedirs({
+    project_root,
+  })
 
   filter("platforms:Windows")
     resincludedirs({
       project_root,
     })
-  resincludedirs({
-    project_root,
-  })
+
+  filter("files:../base/main_init_"..platform_suffix..".cc")
+    vectorextensions("IA32")  -- Disable AVX for main_init_win.cc so our AVX check doesn't use AVX instructions.
 
   filter("platforms:Linux")
     links({
