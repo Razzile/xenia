@@ -1,8 +1,7 @@
 #include "xenia/ui/qt/widgets/nav.h"
 
-#include <gflags/gflags.h>
 #include <QLabel>
-
+#include "xenia/base/cvar.h"
 #include "xenia/ui/qt/tabs/debug_tab.h"
 #include "xenia/ui/qt/tabs/home_tab.h"
 #include "xenia/ui/qt/tabs/library_tab.h"
@@ -45,7 +44,7 @@ void XNav::BuildTabs() {
   // (Razzile): Probably better to move to main window
   // and keep widgets/ for reusable components
   std::vector<XTab*> tabs;
-  if (FLAGS_show_debug_tab) {
+  if (cvars::show_debug_tab) {
     tabs = {new HomeTab(), new LibraryTab(), new XTab("Settings"),
             new DebugTab()};
   } else {

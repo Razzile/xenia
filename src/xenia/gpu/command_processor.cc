@@ -394,7 +394,7 @@ void CommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
   // If we skip a lot then we may need to buffer more, but as the display
   // thread should be fairly idle that shouldn't happen.
   auto swap_state = graphics_system_->swap_state();
-  if (!FLAGS_vsync) {
+  if (!cvars::vsync) {
     std::lock_guard<std::mutex> lock(swap_state->mutex);
     if (swap_state->pending) {
       swap_state->pending = false;
@@ -896,7 +896,7 @@ bool CommandProcessor::ExecutePacketType3_WAIT_REG_MEM(RingBuffer* reader,
       // Wait.
       if (wait >= 0x100) {
         PrepareForWait();
-        if (!FLAGS_vsync) {
+        if (!cvars::vsync) {
           // User wants it fast and dangerous.
           xe::threading::MaybeYield();
         } else {

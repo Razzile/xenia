@@ -7,11 +7,10 @@
  ******************************************************************************
  */
 
-#include <gflags/gflags.h>
-
 #include "xenia/app/library/game_library.h"
 //#include "xenia/base/debugging.h"
 //#include "xenia/base/logging.h"
+#include "xenia/base/cvar.h"
 #include "xenia/base/main.h"
 //#include "xenia/base/platform.h"
 //#include "xenia/base/profiling.h"
@@ -28,10 +27,10 @@
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 #endif
 
-DEFINE_bool(mount_scratch, false, "Enable scratch mount");
-DEFINE_bool(mount_cache, false, "Enable cache mount");
-DEFINE_bool(show_debug_tab, true, "Show the debug tab in the Qt UI");
-DEFINE_string(library_path, "", "Path to search for games");
+DEFINE_bool(mount_scratch, false, "Enable scratch mount", "General");
+DEFINE_bool(mount_cache, false, "Enable cache mount", "General");
+DEFINE_bool(show_debug_tab, true, "Show the debug tab in the Qt UI", "General");
+DEFINE_string(library_path, "", "Path to search for games", "General");
 
 namespace xe {
 namespace app {
@@ -42,7 +41,7 @@ int xenia_main(const std::vector<std::wstring>& args) {
 
   // auto emulator = std::make_unique<xe::Emulator>(L"");
   XGameLibrary* lib = XGameLibrary::Instance();
-  lib->add_path(xe::to_wstring(FLAGS_library_path));
+  lib->add_path(xe::to_wstring(cvars::library_path));
   lib->scan_paths();
 
   // Start Qt

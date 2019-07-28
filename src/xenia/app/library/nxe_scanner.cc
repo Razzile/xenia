@@ -14,7 +14,7 @@ X_STATUS NxeScanner::ScanNxe(File* file, NxeInfo* out_info) {
 
   // Read Title
   std::wstring title(header.title_name);
-  out_info->game_title = std::string(title.begin(), title.end());
+  out_info->game_title = xe::to_string(title);
 
   // Read Icon
   out_info->icon_size = header.title_thumbnail_image_size;

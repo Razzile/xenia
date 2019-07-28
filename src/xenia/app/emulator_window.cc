@@ -7,12 +7,10 @@
  ******************************************************************************
  */
 
-#include <gflags/gflags.h>
-
 #include "xenia/app/emulator_window.h"
 #include "xenia/apu/xaudio2/xaudio2_audio_system.h"
+#include "xenia/base/cvar.h"
 #include "xenia/gpu/vulkan/vulkan_graphics_system.h"
-
 #include "xenia/ui/vulkan/vulkan_instance.h"
 #include "xenia/ui/vulkan/vulkan_provider.h"
 
@@ -27,12 +25,16 @@
 #include "xenia/base/threading.h"
 #include "xenia/emulator.h"
 #include "xenia/gpu/graphics_system.h"
-DEFINE_string(apu, "any", "Audio system. Use: [any, nop, xaudio2]");
-DEFINE_string(gpu, "any", "Graphics system. Use: [any, vulkan, null]");
-DEFINE_string(hid, "any", "Input system. Use: [any, nop, winkey, xinput]");
 
-DEFINE_string(target, "", "Specifies the target .xex or .iso to execute.");
-DEFINE_bool(fullscreen, false, "Toggles fullscreen");
+DEFINE_string(apu, "any", "Audio system. Use: [any, nop, xaudio2]", "General");
+DEFINE_string(gpu, "any", "Graphics system. Use: [any, vulkan, null]",
+              "General");
+DEFINE_string(hid, "any", "Input system. Use: [any, nop, winkey, xinput]",
+              "General");
+
+DEFINE_string(target, "", "Specifies the target .xex or .iso to execute.",
+              "General");
+DEFINE_bool(fullscreen, false, "Toggles fullscreen", "General");
 
 namespace xe {
 namespace app {
