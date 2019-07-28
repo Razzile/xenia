@@ -9,258 +9,232 @@
 
 #include "xenia/gpu/texture_info.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
-#include "third_party/xxhash/xxhash.h"
-
+#include "xenia/base/logging.h"
 #include "xenia/base/math.h"
+#include "xenia/base/memory.h"
+
+#include "third_party/xxhash/xxhash.h"
 
 namespace xe {
 namespace gpu {
 
-using namespace xe::gpu::ucode;
 using namespace xe::gpu::xenos;
-
-const FormatInfo* FormatInfo::Get(uint32_t gpu_format) {
-  static const FormatInfo format_infos[64] = {
-      {TextureFormat::k_1_REVERSE, FormatType::kUncompressed, 1, 1, 1},
-      {TextureFormat::k_1, FormatType::kUncompressed, 1, 1, 1},
-      {TextureFormat::k_8, FormatType::kUncompressed, 1, 1, 8},
-      {TextureFormat::k_1_5_5_5, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_5_6_5, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_6_5_5, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_8_8_8_8, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_2_10_10_10, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_8_A, FormatType::kUncompressed, 1, 1, 8},
-      {TextureFormat::k_8_B, FormatType::kUncompressed, 1, 1, 8},
-      {TextureFormat::k_8_8, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_Cr_Y1_Cb_Y0, FormatType::kCompressed, 2, 1, 16},
-      {TextureFormat::k_Y1_Cr_Y0_Cb, FormatType::kCompressed, 2, 1, 16},
-      {TextureFormat::kUnknown, FormatType::kUncompressed, 0, 0},
-      {TextureFormat::k_8_8_8_8_A, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_4_4_4_4, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_10_11_11, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_11_11_10, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_DXT1, FormatType::kCompressed, 4, 4, 4},
-      {TextureFormat::k_DXT2_3, FormatType::kCompressed, 4, 4, 8},
-      {TextureFormat::k_DXT4_5, FormatType::kCompressed, 4, 4, 8},
-      {TextureFormat::kUnknown, FormatType::kUncompressed, 0, 0},
-      {TextureFormat::k_24_8, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_24_8_FLOAT, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_16, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_16_16, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_16_16_16_16, FormatType::kUncompressed, 1, 1, 64},
-      {TextureFormat::k_16_EXPAND, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_16_16_EXPAND, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_16_16_16_16_EXPAND, FormatType::kUncompressed, 1, 1,
-       64},
-      {TextureFormat::k_16_FLOAT, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_16_16_FLOAT, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_16_16_16_16_FLOAT, FormatType::kUncompressed, 1, 1, 64},
-      {TextureFormat::k_32, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_32_32, FormatType::kUncompressed, 1, 1, 64},
-      {TextureFormat::k_32_32_32_32, FormatType::kUncompressed, 1, 1, 128},
-      {TextureFormat::k_32_FLOAT, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_32_32_FLOAT, FormatType::kUncompressed, 1, 1, 64},
-      {TextureFormat::k_32_32_32_32_FLOAT, FormatType::kUncompressed, 1, 1,
-       128},
-      {TextureFormat::k_32_AS_8, FormatType::kCompressed, 4, 1, 8},
-      {TextureFormat::k_32_AS_8_8, FormatType::kCompressed, 2, 1, 16},
-      {TextureFormat::k_16_MPEG, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_16_16_MPEG, FormatType::kUncompressed, 1, 1, 32},
-      {TextureFormat::k_8_INTERLACED, FormatType::kUncompressed, 1, 1, 8},
-      {TextureFormat::k_32_AS_8_INTERLACED, FormatType::kCompressed, 4, 1, 8},
-      {TextureFormat::k_32_AS_8_8_INTERLACED, FormatType::kCompressed, 1, 1,
-       16},
-      {TextureFormat::k_16_INTERLACED, FormatType::kUncompressed, 1, 1, 16},
-      {TextureFormat::k_16_MPEG_INTERLACED, FormatType::kUncompressed, 1, 1,
-       16},
-      {TextureFormat::k_16_16_MPEG_INTERLACED, FormatType::kUncompressed, 1, 1,
-       32},
-      {TextureFormat::k_DXN, FormatType::kCompressed, 4, 4, 8},
-      {TextureFormat::k_8_8_8_8_AS_16_16_16_16, FormatType::kUncompressed, 1, 1,
-       32},
-      {TextureFormat::k_DXT1_AS_16_16_16_16, FormatType::kCompressed, 4, 4, 4},
-      {TextureFormat::k_DXT2_3_AS_16_16_16_16, FormatType::kCompressed, 4, 4,
-       8},
-      {TextureFormat::k_DXT4_5_AS_16_16_16_16, FormatType::kCompressed, 4, 4,
-       8},
-      {TextureFormat::k_2_10_10_10_AS_16_16_16_16, FormatType::kUncompressed, 1,
-       1, 32},
-      {TextureFormat::k_10_11_11_AS_16_16_16_16, FormatType::kUncompressed, 1,
-       1, 32},
-      {TextureFormat::k_11_11_10_AS_16_16_16_16, FormatType::kUncompressed, 1,
-       1, 32},
-      {TextureFormat::k_32_32_32_FLOAT, FormatType::kUncompressed, 1, 1, 96},
-      {TextureFormat::k_DXT3A, FormatType::kCompressed, 4, 4, 4},
-      {TextureFormat::k_DXT5A, FormatType::kCompressed, 4, 4, 4},
-      {TextureFormat::k_CTX1, FormatType::kCompressed, 4, 4, 4},
-      {TextureFormat::k_DXT3A_AS_1_1_1_1, FormatType::kCompressed, 4, 4, 4},
-      {TextureFormat::kUnknown, FormatType::kUncompressed, 0, 0},
-      {TextureFormat::kUnknown, FormatType::kUncompressed, 0, 0},
-  };
-  return &format_infos[gpu_format];
-}
 
 bool TextureInfo::Prepare(const xe_gpu_texture_fetch_t& fetch,
                           TextureInfo* out_info) {
+  // https://msdn.microsoft.com/en-us/library/windows/desktop/cc308051(v=vs.85).aspx
+  // a2xx_sq_surfaceformat
+
   std::memset(out_info, 0, sizeof(TextureInfo));
 
-  // http://msdn.microsoft.com/en-us/library/windows/desktop/cc308051(v=vs.85).aspx
-  // a2xx_sq_surfaceformat
   auto& info = *out_info;
-  info.guest_address = fetch.address << 12;
-  info.swizzle = fetch.swizzle;
+
+  info.format = static_cast<TextureFormat>(fetch.format);
+  info.endianness = static_cast<Endian>(fetch.endianness);
 
   info.dimension = static_cast<Dimension>(fetch.dimension);
   info.width = info.height = info.depth = 0;
+  info.is_stacked = false;
   switch (info.dimension) {
     case Dimension::k1D:
+      info.dimension = Dimension::k2D;  // we treat 1D textures as 2D
       info.width = fetch.size_1d.width;
+      assert_true(!fetch.stacked);
       break;
     case Dimension::k2D:
-      info.width = fetch.size_2d.width;
-      info.height = fetch.size_2d.height;
+      if (!fetch.stacked) {
+        info.width = fetch.size_2d.width;
+        info.height = fetch.size_2d.height;
+      } else {
+        info.width = fetch.size_stack.width;
+        info.height = fetch.size_stack.height;
+        info.depth = fetch.size_stack.depth;
+        info.is_stacked = true;
+      }
       break;
     case Dimension::k3D:
       info.width = fetch.size_3d.width;
       info.height = fetch.size_3d.height;
       info.depth = fetch.size_3d.depth;
+      assert_true(!fetch.stacked);
       break;
     case Dimension::kCube:
       info.width = fetch.size_stack.width;
       info.height = fetch.size_stack.height;
       info.depth = fetch.size_stack.depth;
+      assert_true(!fetch.stacked);
+      break;
+    default:
+      assert_unhandled_case(info.dimension);
       break;
   }
-  info.format_info = FormatInfo::Get(fetch.format);
-  info.endianness = static_cast<Endian>(fetch.endianness);
-  info.is_tiled = fetch.tiled;
-  info.input_length = 0;  // Populated below.
-  info.output_length = 0;
+  info.pitch = fetch.pitch << 5;
 
-  if (info.format_info->format == TextureFormat::kUnknown) {
-    assert_true("Unsupported texture format");
+  info.mip_min_level = fetch.mip_min_level;
+  info.mip_max_level = std::max(fetch.mip_min_level, fetch.mip_max_level);
+
+  info.is_tiled = fetch.tiled;
+  info.has_packed_mips = fetch.packed_mips;
+
+  if (info.format_info()->format == TextureFormat::kUnknown) {
+    XELOGE("Attempting to fetch from unsupported texture format %d",
+           info.format);
+    info.memory.base_address = fetch.base_address << 12;
+    info.memory.mip_address = fetch.mip_address << 12;
     return false;
   }
 
-  // Must be called here when we know the format.
-  info.input_length = 0;  // Populated below.
-  info.output_length = 0;
-  switch (info.dimension) {
-    case Dimension::k1D:
-      info.CalculateTextureSizes1D(fetch);
-      break;
-    case Dimension::k2D:
-      info.CalculateTextureSizes2D(fetch);
-      break;
-    case Dimension::k3D:
-      // TODO(benvanik): calculate size.
-      return false;
-    case Dimension::kCube:
-      info.CalculateTextureSizesCube(fetch);
-      break;
+  info.extent = TextureExtent::Calculate(out_info, true);
+  info.SetupMemoryInfo(fetch.base_address << 12, fetch.mip_address << 12);
+
+  // We've gotten this far and mip_address is zero, assume no extra mips.
+  if (info.mip_max_level > 0 && !info.memory.mip_address) {
+    info.mip_max_level = 0;
   }
+
+  assert_true(info.mip_min_level <= info.mip_max_level);
 
   return true;
 }
 
-void TextureInfo::CalculateTextureSizes1D(const xe_gpu_texture_fetch_t& fetch) {
-  // ?
-  size_1d.width = fetch.size_1d.width;
-}
+bool TextureInfo::PrepareResolve(uint32_t physical_address,
+                                 TextureFormat format, Endian endian,
+                                 uint32_t pitch, uint32_t width,
+                                 uint32_t height, uint32_t depth,
+                                 TextureInfo* out_info) {
+  assert_true(width > 0);
+  assert_true(height > 0);
 
-void TextureInfo::CalculateTextureSizes2D(const xe_gpu_texture_fetch_t& fetch) {
-  size_2d.logical_width = 1 + fetch.size_2d.width;
-  size_2d.logical_height = 1 + fetch.size_2d.height;
+  std::memset(out_info, 0, sizeof(TextureInfo));
 
-  // Here be dragons. The values here are used in texture_cache.cc to copy
-  // images and create GL textures. Changes here will impact that code.
-  // TODO(benvanik): generic texture copying utility.
+  auto& info = *out_info;
+  info.format = format;
+  info.endianness = endian;
 
-  // w/h in blocks must be a multiple of block size.
-  uint32_t block_width =
-      xe::round_up(size_2d.logical_width, format_info->block_width) /
-      format_info->block_width;
-  uint32_t block_height =
-      xe::round_up(size_2d.logical_height, format_info->block_height) /
-      format_info->block_height;
+  info.dimension = Dimension::k2D;
+  info.width = width - 1;
+  info.height = height - 1;
+  info.depth = depth - 1;
 
-  // Tiles are 32x32 blocks. All textures must be multiples of tile dimensions.
-  uint32_t tile_width = uint32_t(std::ceilf(block_width / 32.0f));
-  uint32_t tile_height = uint32_t(std::ceilf(block_height / 32.0f));
-  size_2d.block_width = tile_width * 32;
-  size_2d.block_height = tile_height * 32;
+  info.pitch = pitch;
+  info.mip_min_level = 0;
+  info.mip_max_level = 0;
 
-  uint32_t bytes_per_block = format_info->block_width *
-                             format_info->block_height *
-                             format_info->bits_per_pixel / 8;
-  uint32_t byte_pitch = tile_width * 32 * bytes_per_block;
-  if (!is_tiled) {
-    // Each row must be a multiple of 256 in linear textures.
-    byte_pitch = xe::round_up(byte_pitch, 256);
+  info.is_tiled = true;
+  info.has_packed_mips = false;
+
+  if (info.format_info()->format == TextureFormat::kUnknown) {
+    assert_true("Unsupported texture format");
+    info.memory.base_address = physical_address;
+    return false;
   }
 
-  size_2d.input_width = tile_width * 32 * format_info->block_width;
-  size_2d.input_height = tile_height * 32 * format_info->block_height;
-
-  size_2d.output_width = block_width * format_info->block_width;
-  size_2d.output_height = block_height * format_info->block_height;
-
-  size_2d.input_pitch = byte_pitch;
-  size_2d.output_pitch = block_width * bytes_per_block;
-
-  input_length = size_2d.input_pitch * size_2d.block_height;
-  output_length = size_2d.output_pitch * block_height;
+  info.extent = TextureExtent::Calculate(out_info, true);
+  info.SetupMemoryInfo(physical_address, 0);
+  return true;
 }
 
-void TextureInfo::CalculateTextureSizesCube(
-    const xe_gpu_texture_fetch_t& fetch) {
-  assert_true(fetch.size_stack.depth + 1 == 6);
-  size_cube.logical_width = 1 + fetch.size_stack.width;
-  size_cube.logical_height = 1 + fetch.size_stack.height;
+uint32_t TextureInfo::GetMaxMipLevels() const {
+  return 1 + xe::log2_floor(std::max({width + 1, height + 1, depth + 1}));
+}
 
-  // w/h in blocks must be a multiple of block size.
-  uint32_t block_width =
-      xe::round_up(size_cube.logical_width, format_info->block_width) /
-      format_info->block_width;
-  uint32_t block_height =
-      xe::round_up(size_cube.logical_height, format_info->block_height) /
-      format_info->block_height;
+const TextureExtent TextureInfo::GetMipExtent(uint32_t mip,
+                                              bool is_guest) const {
+  if (mip == 0) {
+    return extent;
+  }
+  uint32_t mip_width, mip_height;
+  if (is_guest) {
+    mip_width = xe::next_pow2(width + 1) >> mip;
+    mip_height = xe::next_pow2(height + 1) >> mip;
+  } else {
+    mip_width = std::max(1u, (width + 1) >> mip);
+    mip_height = std::max(1u, (height + 1) >> mip);
+  }
+  return TextureExtent::Calculate(format_info(), mip_width, mip_height,
+                                  depth + 1, is_tiled, is_guest);
+}
 
-  // Tiles are 32x32 blocks. All textures must be multiples of tile dimensions.
-  uint32_t tile_width = uint32_t(std::ceilf(block_width / 32.0f));
-  uint32_t tile_height = uint32_t(std::ceilf(block_height / 32.0f));
-  size_cube.block_width = tile_width * 32;
-  size_cube.block_height = tile_height * 32;
+void TextureInfo::GetMipSize(uint32_t mip, uint32_t* out_width,
+                             uint32_t* out_height) const {
+  assert_not_null(out_width);
+  assert_not_null(out_height);
+  if (mip == 0) {
+    *out_width = width + 1;
+    *out_height = height + 1;
+    return;
+  }
+  uint32_t width_pow2 = xe::next_pow2(width + 1);
+  uint32_t height_pow2 = xe::next_pow2(height + 1);
+  *out_width = std::max(width_pow2 >> mip, 1u);
+  *out_height = std::max(height_pow2 >> mip, 1u);
+}
 
-  uint32_t bytes_per_block = format_info->block_width *
-                             format_info->block_height *
-                             format_info->bits_per_pixel / 8;
-  uint32_t byte_pitch = tile_width * 32 * bytes_per_block;
-  if (!is_tiled) {
-    // Each row must be a multiple of 256 in linear textures.
-    byte_pitch = xe::round_up(byte_pitch, 256);
+uint32_t TextureInfo::GetMipLocation(uint32_t mip, uint32_t* offset_x,
+                                     uint32_t* offset_y, bool is_guest) const {
+  if (mip == 0) {
+    // Short-circuit. Mip 0 is always stored in base_address.
+    if (!has_packed_mips) {
+      *offset_x = 0;
+      *offset_y = 0;
+    } else {
+      GetPackedTileOffset(0, offset_x, offset_y);
+    }
+    return memory.base_address;
   }
 
-  size_cube.input_width = tile_width * 32 * format_info->block_width;
-  size_cube.input_height = tile_height * 32 * format_info->block_height;
+  if (!memory.mip_address) {
+    // Short-circuit. There is no mip data.
+    *offset_x = 0;
+    *offset_y = 0;
+    return 0;
+  }
 
-  size_cube.output_width = block_width * format_info->block_width;
-  size_cube.output_height = block_height * format_info->block_height;
+  uint32_t address_base, address_offset;
+  address_base = memory.mip_address;
+  address_offset = 0;
 
-  size_cube.input_pitch = byte_pitch;
-  size_cube.output_pitch = block_width * bytes_per_block;
+  auto bytes_per_block = format_info()->bytes_per_block();
 
-  size_cube.input_face_length = size_cube.input_pitch * size_cube.block_height;
-  input_length = size_cube.input_face_length * 6;
-  size_cube.output_face_length = size_cube.output_pitch * block_height;
-  output_length = size_cube.output_face_length * 6;
+  if (!has_packed_mips) {
+    for (uint32_t i = 1; i < mip; i++) {
+      address_offset +=
+          GetMipExtent(i, is_guest).all_blocks() * bytes_per_block;
+    }
+    *offset_x = 0;
+    *offset_y = 0;
+    return address_base + address_offset;
+  }
+
+  uint32_t width_pow2 = xe::next_pow2(width + 1);
+  uint32_t height_pow2 = xe::next_pow2(height + 1);
+
+  // Walk forward to find the address of the mip.
+  uint32_t packed_mip_base = 1;
+  for (uint32_t i = packed_mip_base; i < mip; i++, packed_mip_base++) {
+    uint32_t mip_width = std::max(width_pow2 >> i, 1u);
+    uint32_t mip_height = std::max(height_pow2 >> i, 1u);
+    if (std::min(mip_width, mip_height) <= 16) {
+      // We've reached the point where the mips are packed into a single tile.
+      break;
+    }
+    address_offset += GetMipExtent(i, is_guest).all_blocks() * bytes_per_block;
+  }
+
+  // Now, check if the mip is packed at an offset.
+  GetPackedTileOffset(width_pow2 >> mip, height_pow2 >> mip, format_info(),
+                      mip - packed_mip_base, offset_x, offset_y);
+  return address_base + address_offset;
 }
 
-void TextureInfo::GetPackedTileOffset(const TextureInfo& texture_info,
-                                      uint32_t* out_offset_x,
-                                      uint32_t* out_offset_y) {
+bool TextureInfo::GetPackedTileOffset(uint32_t width, uint32_t height,
+                                      const FormatInfo* format_info,
+                                      int packed_tile, uint32_t* offset_x,
+                                      uint32_t* offset_y) {
   // Tile size is 32x32, and once textures go <=16 they are packed into a
   // single tile together. The math here is insane. Most sourced
   // from graph paper and looking at dds dumps.
@@ -280,6 +254,10 @@ void TextureInfo::GetPackedTileOffset(const TextureInfo& texture_info,
   // This only works for square textures, or textures that are some non-pot
   // <= square. As soon as the aspect ratio goes weird, the textures start to
   // stretch across tiles.
+  //
+  // The 2x2 and 1x1 squares are packed in their specific positions because
+  // each square is the size of at least one block (which is 4x4 pixels max)
+  //
   // if (tile_aligned(w) > tile_aligned(h)) {
   //   // wider than tall, so packed horizontally
   // } else if (tile_aligned(w) < tile_aligned(h)) {
@@ -292,48 +270,124 @@ void TextureInfo::GetPackedTileOffset(const TextureInfo& texture_info,
   // The minimum dimension is what matters most: if either width or height
   // is <= 16 this mode kicks in.
 
-  if (std::min(texture_info.size_2d.logical_width,
-               texture_info.size_2d.logical_height) > 16) {
+  uint32_t log2_width = xe::log2_ceil(width);
+  uint32_t log2_height = xe::log2_ceil(height);
+  if (std::min(log2_width, log2_height) > 4) {
     // Too big, not packed.
-    *out_offset_x = 0;
-    *out_offset_y = 0;
-    return;
+    *offset_x = 0;
+    *offset_y = 0;
+    return false;
   }
 
-  if (xe::log2_ceil(texture_info.size_2d.logical_width) >
-      xe::log2_ceil(texture_info.size_2d.logical_height)) {
-    // Wider than tall. Laid out vertically.
-    *out_offset_x = 0;
-    *out_offset_y = 16;
+  // Find the block offset of the mip.
+  if (packed_tile < 3) {
+    if (log2_width > log2_height) {
+      // Wider than tall. Laid out vertically.
+      *offset_x = 0;
+      *offset_y = 16 >> packed_tile;
+    } else {
+      // Taller than wide. Laid out horizontally.
+      *offset_x = 16 >> packed_tile;
+      *offset_y = 0;
+    }
   } else {
-    // Taller than wide. Laid out horizontally.
-    *out_offset_x = 16;
-    *out_offset_y = 0;
+    if (log2_width > log2_height) {
+      // Wider than tall. Laid out vertically.
+      *offset_x = 16 >> (packed_tile - 2);
+      *offset_y = 0;
+    } else {
+      // Taller than wide. Laid out horizontally.
+      *offset_x = 0;
+      *offset_y = 16 >> (packed_tile - 2);
+    }
   }
-  *out_offset_x /= texture_info.format_info->block_width;
-  *out_offset_y /= texture_info.format_info->block_height;
+
+  *offset_x /= format_info->block_width;
+  *offset_y /= format_info->block_height;
+  return true;
 }
 
-// https://code.google.com/p/crunch/source/browse/trunk/inc/crn_decomp.h#4104
-uint32_t TextureInfo::TiledOffset2DOuter(uint32_t y, uint32_t width,
-                                         uint32_t log_bpp) {
-  uint32_t macro = ((y >> 5) * (width >> 5)) << (log_bpp + 7);
-  uint32_t micro = ((y & 6) << 2) << log_bpp;
-  return macro + ((micro & ~15) << 1) + (micro & 15) +
-         ((y & 8) << (3 + log_bpp)) + ((y & 1) << 4);
-}
-
-uint32_t TextureInfo::TiledOffset2DInner(uint32_t x, uint32_t y, uint32_t bpp,
-                                         uint32_t base_offset) {
-  uint32_t macro = (x >> 5) << (bpp + 7);
-  uint32_t micro = (x & 7) << bpp;
-  uint32_t offset = base_offset + (macro + ((micro & ~15) << 1) + (micro & 15));
-  return ((offset & ~511) << 3) + ((offset & 448) << 2) + (offset & 63) +
-         ((y & 16) << 7) + (((((y & 8) >> 2) + (x >> 3)) & 3) << 6);
+bool TextureInfo::GetPackedTileOffset(int packed_tile, uint32_t* offset_x,
+                                      uint32_t* offset_y) const {
+  if (!has_packed_mips) {
+    *offset_x = 0;
+    *offset_y = 0;
+    return false;
+  }
+  return GetPackedTileOffset(xe::next_pow2(width + 1),
+                             xe::next_pow2(height + 1), format_info(),
+                             packed_tile, offset_x, offset_y);
 }
 
 uint64_t TextureInfo::hash() const {
   return XXH64(this, sizeof(TextureInfo), 0);
+}
+
+void TextureInfo::SetupMemoryInfo(uint32_t base_address, uint32_t mip_address) {
+  uint32_t bytes_per_block = format_info()->bytes_per_block();
+
+  memory.base_address = 0;
+  memory.base_size = 0;
+  memory.mip_address = 0;
+  memory.mip_size = 0;
+
+  if (mip_min_level == 0 && base_address) {
+    // There is a base mip level.
+    memory.base_address = base_address;
+    memory.base_size = GetMipExtent(0, true).visible_blocks() * bytes_per_block;
+  }
+
+  if (mip_min_level == 0 && mip_max_level == 0) {
+    // Sort circuit. Only one mip.
+    return;
+  }
+
+  if (mip_min_level == 0 && base_address == mip_address) {
+    // TODO(gibbed): This doesn't actually make any sense. Force only one mip.
+    // Offending title issues: #26, #45
+    return;
+  }
+
+  if (mip_min_level > 0) {
+    if ((base_address && !mip_address) || (base_address == mip_address)) {
+      // Mip data is actually at base address?
+      mip_address = base_address;
+      base_address = 0;
+    } else if (!base_address && mip_address) {
+      // Nothing needs to be done.
+    } else {
+      // WTF?
+      assert_always();
+    }
+  }
+
+  memory.mip_address = mip_address;
+
+  if (!has_packed_mips) {
+    for (uint32_t mip = std::max(1u, mip_min_level); mip < mip_max_level;
+         mip++) {
+      memory.mip_size += GetMipExtent(mip, true).all_blocks() * bytes_per_block;
+    }
+    memory.mip_size +=
+        GetMipExtent(mip_max_level, true).visible_blocks() * bytes_per_block;
+    return;
+  }
+
+  uint32_t width_pow2 = xe::next_pow2(width + 1);
+  uint32_t height_pow2 = xe::next_pow2(height + 1);
+
+  // Walk forward to find the address of the mip.
+  uint32_t packed_mip_base = std::max(1u, mip_min_level);
+  for (uint32_t mip = packed_mip_base; mip < mip_max_level;
+       mip++, packed_mip_base++) {
+    uint32_t mip_width = std::max(width_pow2 >> mip, 1u);
+    uint32_t mip_height = std::max(height_pow2 >> mip, 1u);
+    if (std::min(mip_width, mip_height) <= 16) {
+      // We've reached the point where the mips are packed into a single tile.
+      break;
+    }
+    memory.mip_size += GetMipExtent(mip, true).all_blocks() * bytes_per_block;
+  }
 }
 
 }  //  namespace gpu

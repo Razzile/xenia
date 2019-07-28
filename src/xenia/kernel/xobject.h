@@ -7,16 +7,21 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_KERNEL_XBOXKRNL_XOBJECT_H_
-#define XENIA_KERNEL_XBOXKRNL_XOBJECT_H_
+#ifndef XENIA_KERNEL_XOBJECT_H_
+#define XENIA_KERNEL_XOBJECT_H_
 
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
+#include <string>
 
+#include "xenia/base/threading.h"
+#include "xenia/memory.h"
 #include "xenia/xbox.h"
 
 namespace xe {
+class ByteStream;
 class Emulator;
-class Memory;
 }  // namespace xe
 
 namespace xe {
@@ -27,7 +32,7 @@ class KernelState;
 template <typename T>
 class object_ref;
 
-// http://www.nirsoft.net/kernel_struct/vista/DISPATCHER_HEADER.html
+// https://www.nirsoft.net/kernel_struct/vista/DISPATCHER_HEADER.html
 typedef struct {
   struct {
     uint8_t type;
@@ -53,15 +58,15 @@ typedef struct {
   xe::be<uint32_t> wait_list_flink;
   xe::be<uint32_t> wait_list_blink;
 } X_DISPATCH_HEADER;
+static_assert_size(X_DISPATCH_HEADER, 0x10);
 
-// http://www.nirsoft.net/kernel_struct/vista/OBJECT_HEADER.html
+// https://www.nirsoft.net/kernel_struct/vista/OBJECT_HEADER.html
 struct X_OBJECT_HEADER {
   xe::be<uint32_t> pointer_count;
   union {
     xe::be<uint32_t> handle_count;
     xe::be<uint32_t> next_to_free;
   };
-  xe::be<uint32_t> object_type_ptr;
   uint8_t name_info_offset;
   uint8_t handle_info_offset;
   uint8_t quota_info_offset;
@@ -70,41 +75,57 @@ struct X_OBJECT_HEADER {
     xe::be<uint32_t> object_create_info;  // X_OBJECT_CREATE_INFORMATION
     xe::be<uint32_t> quota_block_charged;
   };
-  xe::be<uint32_t> security_descriptor;
+  xe::be<uint32_t> object_type_ptr;  // -0x8 POBJECT_TYPE
+  xe::be<uint32_t> unk_04;           // -0x4
 
   // Object lives after this header.
   // (There's actually a body field here which is the object itself)
 };
 
-// http://www.nirsoft.net/kernel_struct/vista/OBJECT_CREATE_INFORMATION.html
+// https://www.nirsoft.net/kernel_struct/vista/OBJECT_CREATE_INFORMATION.html
 struct X_OBJECT_CREATE_INFORMATION {
-  xe::be<uint32_t> attributes;
-  xe::be<uint32_t> root_directory_ptr;
-  xe::be<uint32_t> parse_context_ptr;
-  xe::be<uint32_t> probe_mode;
-  xe::be<uint32_t> paged_pool_charge;
-  xe::be<uint32_t> non_paged_pool_charge;
-  xe::be<uint32_t> security_descriptor_charge;
-  xe::be<uint32_t> security_descriptor;
-  xe::be<uint32_t> security_qos_ptr;
+  xe::be<uint32_t> attributes;                  // 0x0
+  xe::be<uint32_t> root_directory_ptr;          // 0x4
+  xe::be<uint32_t> parse_context_ptr;           // 0x8
+  xe::be<uint32_t> probe_mode;                  // 0xC
+  xe::be<uint32_t> paged_pool_charge;           // 0x10
+  xe::be<uint32_t> non_paged_pool_charge;       // 0x14
+  xe::be<uint32_t> security_descriptor_charge;  // 0x18
+  xe::be<uint32_t> security_descriptor;         // 0x1C
+  xe::be<uint32_t> security_qos_ptr;            // 0x20
 
   // Security QoS here (SECURITY_QUALITY_OF_SERVICE) too!
+};
+
+struct X_OBJECT_TYPE {
+  xe::be<uint32_t> constructor;  // 0x0
+  xe::be<uint32_t> destructor;   // 0x4
+  xe::be<uint32_t> unk_08;       // 0x8
+  xe::be<uint32_t> unk_0C;       // 0xC
+  xe::be<uint32_t> unk_10;       // 0x10
+  xe::be<uint32_t> unk_14;    // 0x14 probably offset from ntobject to keobject
+  xe::be<uint32_t> pool_tag;  // 0x18
 };
 
 class XObject {
  public:
   enum Type {
-    kTypeModule,
-    kTypeThread,
+    kTypeUndefined,
+    kTypeEnumerator,
     kTypeEvent,
     kTypeFile,
-    kTypeSemaphore,
-    kTypeNotifyListener,
+    kTypeIOCompletion,
+    kTypeModule,
     kTypeMutant,
+    kTypeNotifyListener,
+    kTypeSemaphore,
+    kTypeSession,
+    kTypeSocket,
+    kTypeThread,
     kTypeTimer,
-    kTypeEnumerator,
   };
 
+  XObject(Type type);
   XObject(KernelState* kernel_state, Type type);
   virtual ~XObject();
 
@@ -113,15 +134,36 @@ class XObject {
   Memory* memory() const;
 
   Type type();
-  X_HANDLE handle() const;
+
+  // Returns the primary handle of this object.
+  X_HANDLE handle() const { return handles_[0]; }
+
+  // Returns all associated handles with this object.
+  std::vector<X_HANDLE> handles() const { return handles_; }
+  std::vector<X_HANDLE>& handles() { return handles_; }
+
   const std::string& name() const { return name_; }
   uint32_t guest_object() const { return guest_object_ptr_; }
+
+  // Has this object been created for use by the host?
+  // Host objects are persisted through reloads/etc.
+  bool is_host_object() const { return host_object_; }
+  void set_host_object(bool host_object) { host_object_ = host_object; }
+
+  template <typename T>
+  T* guest_object() {
+    return memory()->TranslateVirtual<T*>(guest_object_ptr_);
+  }
 
   void RetainHandle();
   bool ReleaseHandle();
   void Retain();
   void Release();
   X_STATUS Delete();
+
+  virtual bool Save(ByteStream* stream) { return false; }
+  static object_ref<XObject> Restore(KernelState* kernel_state, Type type,
+                                     ByteStream* stream);
 
   // Reference()
   // Dereference()
@@ -143,42 +185,58 @@ class XObject {
                                              int32_t as_type = -1);
   template <typename T>
   static object_ref<T> GetNativeObject(KernelState* kernel_state,
-                                       void* native_ptr, int32_t as_type = -1) {
-    return object_ref<T>(reinterpret_cast<T*>(
-        GetNativeObject(kernel_state, native_ptr, as_type).release()));
-  }
-
-  virtual void* GetWaitHandle() { return 0; }
+                                       void* native_ptr, int32_t as_type = -1);
 
  protected:
+  bool SaveObject(ByteStream* stream);
+  bool RestoreObject(ByteStream* stream);
+
+  // Called on successful wait.
+  virtual void WaitCallback() {}
+  virtual xe::threading::WaitHandle* GetWaitHandle() { return nullptr; }
+
   // Creates the kernel object for guest code to use. Typically not needed.
   uint8_t* CreateNative(uint32_t size);
   void SetNativePointer(uint32_t native_ptr, bool uninitialized = false);
+
+  template <typename T>
+  T* CreateNative() {
+    return reinterpret_cast<T*>(CreateNative(sizeof(T)));
+  }
+
+  // Stash native pointer into X_DISPATCH_HEADER
+  static void StashHandle(X_DISPATCH_HEADER* header, uint32_t handle) {
+    header->wait_list_flink = 'XEN\0';
+    header->wait_list_blink = handle;
+  }
 
   static uint32_t TimeoutTicksToMs(int64_t timeout_ticks);
 
   KernelState* kernel_state_;
 
+  // Host objects are persisted through resets/etc.
+  bool host_object_ = false;
+
  private:
-  std::atomic<int32_t> handle_ref_count_;
   std::atomic<int32_t> pointer_ref_count_;
 
   Type type_;
-  X_HANDLE handle_;
+  std::vector<X_HANDLE> handles_;
   std::string name_;  // May be zero length.
 
   // Guest pointer for kernel object. Remember: X_OBJECT_HEADER precedes this
   // if we allocated it!
-  uint32_t guest_object_ptr_;
-  bool allocated_guest_object_;
+  uint32_t guest_object_ptr_ = 0;
+  bool allocated_guest_object_ = false;
 };
 
 template <typename T>
 class object_ref {
  public:
   object_ref() noexcept : value_(nullptr) {}
-  object_ref(nullptr_t) noexcept : value_(nullptr) {}
-  object_ref& operator=(nullptr_t) noexcept {
+  object_ref(std::nullptr_t) noexcept  // NOLINT(runtime/explicit)
+      : value_(nullptr) {}
+  object_ref& operator=(std::nullptr_t) noexcept {
     reset();
     return (*this);
   }
@@ -209,18 +267,16 @@ class object_ref {
   }
 
   object_ref& operator=(const object_ref& right) noexcept {
-    object_ref(right).swap(*this);
+    object_ref(right).swap(*this);  // NOLINT(runtime/explicit): misrecognized?
     return (*this);
   }
   template <typename V>
   object_ref& operator=(const object_ref<V>& right) noexcept {
-    object_ref(right).swap(*this);
+    object_ref(right).swap(*this);  // NOLINT(runtime/explicit): misrecognized?
     return (*this);
   }
 
-  void swap(object_ref& right) noexcept {
-    std::_Swap_adl(value_, right.value_);
-  }
+  void swap(object_ref& right) noexcept { std::swap(value_, right.value_); }
 
   ~object_ref() noexcept {
     if (value_) {
@@ -252,36 +308,33 @@ class object_ref {
     return value;
   }
 
-  static void accept(T* value) {
-    reset(value);
-    value->Release();
-  }
-
   void reset() noexcept { object_ref().swap(*this); }
 
   void reset(T* value) noexcept { object_ref(value).swap(*this); }
+
+  inline bool operator==(const T* right) noexcept { return value_ == right; }
 
  private:
   T* value_ = nullptr;
 };
 
 template <class _Ty>
-bool operator==(const object_ref<_Ty>& _Left, nullptr_t) noexcept {
-  return (_Left.get() == (_Ty*)0);
+bool operator==(const object_ref<_Ty>& _Left, std::nullptr_t) noexcept {
+  return (_Left.get() == reinterpret_cast<_Ty*>(0));
 }
 
 template <class _Ty>
-bool operator==(nullptr_t, const object_ref<_Ty>& _Right) noexcept {
-  return ((_Ty*)0 == _Right.get());
+bool operator==(std::nullptr_t, const object_ref<_Ty>& _Right) noexcept {
+  return (reinterpret_cast<_Ty*>(0) == _Right.get());
 }
 
 template <class _Ty>
-bool operator!=(const object_ref<_Ty>& _Left, nullptr_t _Right) noexcept {
+bool operator!=(const object_ref<_Ty>& _Left, std::nullptr_t _Right) noexcept {
   return (!(_Left == _Right));
 }
 
 template <class _Ty>
-bool operator!=(nullptr_t _Left, const object_ref<_Ty>& _Right) noexcept {
+bool operator!=(std::nullptr_t _Left, const object_ref<_Ty>& _Right) noexcept {
   return (!(_Left == _Right));
 }
 
@@ -291,7 +344,14 @@ object_ref<T> retain_object(T* ptr) {
   return object_ref<T>(ptr);
 }
 
+template <typename T>
+object_ref<T> XObject::GetNativeObject(KernelState* kernel_state,
+                                       void* native_ptr, int32_t as_type) {
+  return object_ref<T>(reinterpret_cast<T*>(
+      GetNativeObject(kernel_state, native_ptr, as_type).release()));
+}
+
 }  // namespace kernel
 }  // namespace xe
 
-#endif  // XENIA_KERNEL_XBOXKRNL_XOBJECT_H_
+#endif  // XENIA_KERNEL_XOBJECT_H_

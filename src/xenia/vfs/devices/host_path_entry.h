@@ -32,8 +32,7 @@ class HostPathEntry : public Entry {
 
   const std::wstring& local_path() { return local_path_; }
 
-  X_STATUS Open(KernelState* kernel_state, uint32_t desired_access,
-                object_ref<XFile>* out_file) override;
+  X_STATUS Open(uint32_t desired_access, File** out_file) override;
 
   bool can_map() const override { return true; }
   std::unique_ptr<MappedMemory> OpenMapped(MappedMemory::Mode mode,

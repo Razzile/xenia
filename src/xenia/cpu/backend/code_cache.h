@@ -7,10 +7,12 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_BACKEND_CODE_CACHE_H_
-#define XENIA_BACKEND_CODE_CACHE_H_
+#ifndef XENIA_CPU_BACKEND_CODE_CACHE_H_
+#define XENIA_CPU_BACKEND_CODE_CACHE_H_
 
 #include <string>
+
+#include "xenia/cpu/function.h"
 
 namespace xe {
 namespace cpu {
@@ -24,10 +26,17 @@ class CodeCache {
   virtual std::wstring file_name() const = 0;
   virtual uint32_t base_address() const = 0;
   virtual uint32_t total_size() const = 0;
+
+  // Finds a function based on the given host PC (that may be within a
+  // function).
+  virtual GuestFunction* LookupFunction(uint64_t host_pc) = 0;
+
+  // Finds platform-specific function unwind info for the given host PC.
+  virtual void* LookupUnwindInfo(uint64_t host_pc) = 0;
 };
 
 }  // namespace backend
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_BACKEND_CODE_CACHE_H_
+#endif  // XENIA_CPU_BACKEND_CODE_CACHE_H_

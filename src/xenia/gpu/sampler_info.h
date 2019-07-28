@@ -10,23 +10,27 @@
 #ifndef XENIA_GPU_SAMPLER_INFO_H_
 #define XENIA_GPU_SAMPLER_INFO_H_
 
-#include "xenia/gpu/ucode.h"
+#include "xenia/gpu/shader.h"
 #include "xenia/gpu/xenos.h"
 
 namespace xe {
 namespace gpu {
 
 struct SamplerInfo {
-  ucode::instr_tex_filter_t min_filter;
-  ucode::instr_tex_filter_t mag_filter;
-  ucode::instr_tex_filter_t mip_filter;
-  uint32_t clamp_u;
-  uint32_t clamp_v;
-  uint32_t clamp_w;
-  ucode::instr_aniso_filter_t aniso_filter;
+  TextureFilter min_filter;
+  TextureFilter mag_filter;
+  TextureFilter mip_filter;
+  ClampMode clamp_u;
+  ClampMode clamp_v;
+  ClampMode clamp_w;
+  AnisoFilter aniso_filter;
+  BorderColor border_color;
+  float lod_bias;
+  uint32_t mip_min_level;
+  uint32_t mip_max_level;
 
   static bool Prepare(const xenos::xe_gpu_texture_fetch_t& fetch,
-                      const ucode::instr_fetch_tex_t& fetch_instr,
+                      const ParsedTextureFetchInstruction& fetch_instr,
                       SamplerInfo* out_info);
 
   uint64_t hash() const;
@@ -34,7 +38,9 @@ struct SamplerInfo {
     return min_filter == other.min_filter && mag_filter == other.mag_filter &&
            mip_filter == other.mip_filter && clamp_u == other.clamp_u &&
            clamp_v == other.clamp_v && clamp_w == other.clamp_w &&
-           aniso_filter == other.aniso_filter;
+           aniso_filter == other.aniso_filter && lod_bias == other.lod_bias &&
+           mip_min_level == other.mip_min_level &&
+           mip_max_level == other.mip_max_level;
   }
 };
 

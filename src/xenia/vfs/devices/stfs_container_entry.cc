@@ -8,15 +8,17 @@
  */
 
 #include "xenia/vfs/devices/stfs_container_entry.h"
-
 #include "xenia/base/math.h"
 #include "xenia/vfs/devices/stfs_container_file.h"
+
+#include <map>
 
 namespace xe {
 namespace vfs {
 
 StfsContainerEntry::StfsContainerEntry(Device* device, Entry* parent,
-                                       std::string path, MappedMemory* mmap)
+                                       std::string path,
+                                       MultifileMemoryMap* mmap)
     : Entry(device, parent, path),
       mmap_(mmap),
       data_offset_(0),
@@ -24,11 +26,16 @@ StfsContainerEntry::StfsContainerEntry(Device* device, Entry* parent,
 
 StfsContainerEntry::~StfsContainerEntry() = default;
 
-X_STATUS StfsContainerEntry::Open(KernelState* kernel_state,
-                                  uint32_t desired_access,
-                                  object_ref<XFile>* out_file) {
-  *out_file = object_ref<XFile>(
-      new StfsContainerFile(kernel_state, desired_access, this));
+std::unique_ptr<StfsContainerEntry> StfsContainerEntry::Create(
+    Device* device, Entry* parent, std::string name, MultifileMemoryMap* mmap) {
+  auto path = xe::join_paths(parent->path(), name);
+  auto entry = std::make_unique<StfsContainerEntry>(device, parent, path, mmap);
+
+  return std::move(entry);
+}
+
+X_STATUS StfsContainerEntry::Open(uint32_t desired_access, File** out_file) {
+  *out_file = new StfsContainerFile(desired_access, this);
   return X_STATUS_SUCCESS;
 }
 

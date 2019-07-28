@@ -9,12 +9,14 @@
 
 #include "xenia/apu/xaudio2/xaudio2_audio_driver.h"
 
-#include <xaudio2.h>
+// Must be included before xaudio2.h so we get the right windows.h include.
+#include "xenia/base/platform_win.h"
+
+#include <xaudio2.h>  // NOLINT(build/include_order)
 
 #include "xenia/apu/apu_flags.h"
 #include "xenia/base/clock.h"
 #include "xenia/base/logging.h"
-#include "xenia/emulator.h"
 
 namespace xe {
 namespace apu {
@@ -22,32 +24,28 @@ namespace xaudio2 {
 
 class XAudio2AudioDriver::VoiceCallback : public IXAudio2VoiceCallback {
  public:
-  VoiceCallback(HANDLE semaphore) : semaphore_(semaphore) {}
+  explicit VoiceCallback(xe::threading::Semaphore* semaphore)
+      : semaphore_(semaphore) {}
   ~VoiceCallback() {}
 
   void OnStreamEnd() {}
   void OnVoiceProcessingPassEnd() {}
   void OnVoiceProcessingPassStart(uint32_t samples_required) {}
   void OnBufferEnd(void* context) {
-    BOOL ret = ReleaseSemaphore(semaphore_, 1, NULL);
-    assert_true(ret == TRUE);
+    auto ret = semaphore_->Release(1, nullptr);
+    assert_true(ret);
   }
   void OnBufferStart(void* context) {}
   void OnLoopEnd(void* context) {}
   void OnVoiceError(void* context, HRESULT result) {}
 
  private:
-  HANDLE semaphore_;
+  xe::threading::Semaphore* semaphore_ = nullptr;
 };
 
-XAudio2AudioDriver::XAudio2AudioDriver(Emulator* emulator, HANDLE semaphore)
-    : AudioDriver(emulator),
-      audio_(nullptr),
-      mastering_voice_(nullptr),
-      pcm_voice_(nullptr),
-      semaphore_(semaphore),
-      voice_callback_(nullptr),
-      current_frame_(0) {
+XAudio2AudioDriver::XAudio2AudioDriver(Memory* memory,
+                                       xe::threading::Semaphore* semaphore)
+    : AudioDriver(memory), semaphore_(semaphore) {
   static_assert(frame_count_ == XAUDIO2_MAX_QUEUED_BUFFERS,
                 "xaudio header differs");
 }
@@ -55,27 +53,52 @@ XAudio2AudioDriver::XAudio2AudioDriver(Emulator* emulator, HANDLE semaphore)
 XAudio2AudioDriver::~XAudio2AudioDriver() = default;
 
 const DWORD ChannelMasks[] = {
-    0,  // TODO: fixme
-    0,  // TODO: fixme
+    0,
+    0,
     SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT | SPEAKER_LOW_FREQUENCY,
-    0,  // TODO: fixme
-    0,  // TODO: fixme
-    0,  // TODO: fixme
+    0,
+    0,
+    0,
     SPEAKER_FRONT_LEFT | SPEAKER_FRONT_CENTER | SPEAKER_FRONT_RIGHT |
         SPEAKER_LOW_FREQUENCY | SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT,
-    0,  // TODO: fixme
+    0,
 };
 
-void XAudio2AudioDriver::Initialize() {
+bool XAudio2AudioDriver::Initialize() {
   HRESULT hr;
 
   voice_callback_ = new VoiceCallback(semaphore_);
 
-  hr = XAudio2Create(&audio_, 0, XAUDIO2_DEFAULT_PROCESSOR);
+  // Load XAudio2_8.dll dynamically - Windows 8.1 SDK references XAudio2_8.dll
+  // in xaudio2.lib, which is available on Windows 8.1, however, Windows 10 SDK
+  // references XAudio2_9.dll in it, which is only available in Windows 10, and
+  // XAudio2_8.dll is linked through a different .lib - xaudio2_8.lib, so easier
+  // not to link the .lib at all.
+  xaudio2_module_ = reinterpret_cast<void*>(LoadLibrary(L"XAudio2_8.dll"));
+  if (!xaudio2_module_) {
+    XELOGE("LoadLibrary(XAudio2_8.dll) failed");
+    assert_always();
+    return false;
+  }
+
+  union {
+    HRESULT(__stdcall* xaudio2_create)
+    (IXAudio2** xaudio2_out, UINT32 flags, XAUDIO2_PROCESSOR xaudio2_processor);
+    FARPROC xaudio2_create_ptr;
+  };
+  xaudio2_create_ptr = GetProcAddress(
+      reinterpret_cast<HMODULE>(xaudio2_module_), "XAudio2Create");
+  if (!xaudio2_create_ptr) {
+    XELOGE("GetProcAddress(XAudio2_8.dll, XAudio2Create) failed");
+    assert_always();
+    return false;
+  }
+
+  hr = xaudio2_create(&audio_, 0, XAUDIO2_DEFAULT_PROCESSOR);
   if (FAILED(hr)) {
     XELOGE("XAudio2Create failed with %.8X", hr);
     assert_always();
-    return;
+    return false;
   }
 
   XAUDIO2_DEBUG_CONFIGURATION config;
@@ -91,7 +114,7 @@ void XAudio2AudioDriver::Initialize() {
   if (FAILED(hr)) {
     XELOGE("CreateMasteringVoice failed with %.8X", hr);
     assert_always();
-    return;
+    return false;
   }
 
   WAVEFORMATIEEEFLOATEX waveformat;
@@ -118,19 +141,21 @@ void XAudio2AudioDriver::Initialize() {
   if (FAILED(hr)) {
     XELOGE("CreateSourceVoice failed with %.8X", hr);
     assert_always();
-    return;
+    return false;
   }
 
   hr = pcm_voice_->Start();
   if (FAILED(hr)) {
     XELOGE("Start failed with %.8X", hr);
     assert_always();
-    return;
+    return false;
   }
 
   if (FLAGS_mute) {
     pcm_voice_->SetVolume(0.0f);
   }
+
+  return true;
 }
 
 void XAudio2AudioDriver::SubmitFrame(uint32_t frame_ptr) {
@@ -155,7 +180,7 @@ void XAudio2AudioDriver::SubmitFrame(uint32_t frame_ptr) {
 
   XAUDIO2_BUFFER buffer;
   buffer.Flags = 0;
-  buffer.pAudioData = (BYTE*)output_frame;
+  buffer.pAudioData = reinterpret_cast<BYTE*>(output_frame);
   buffer.AudioBytes = frame_size_;
   buffer.PlayBegin = 0;
   buffer.PlayLength = channel_samples_;
@@ -174,21 +199,37 @@ void XAudio2AudioDriver::SubmitFrame(uint32_t frame_ptr) {
 
   // Update playback ratio to our time scalar.
   // This will keep audio in sync with the game clock.
-  pcm_voice_->SetFrequencyRatio(float(xe::Clock::guest_time_scalar()));
+  pcm_voice_->SetFrequencyRatio(
+      static_cast<float>(xe::Clock::guest_time_scalar()));
 }
 
 void XAudio2AudioDriver::Shutdown() {
-  pcm_voice_->Stop();
-  pcm_voice_->DestroyVoice();
-  pcm_voice_ = NULL;
+  if (pcm_voice_) {
+    pcm_voice_->Stop();
+    pcm_voice_->DestroyVoice();
+    pcm_voice_ = NULL;
+  }
 
-  mastering_voice_->DestroyVoice();
-  mastering_voice_ = NULL;
+  if (mastering_voice_) {
+    mastering_voice_->DestroyVoice();
+    mastering_voice_ = NULL;
+  }
 
-  audio_->StopEngine();
-  audio_->Release();
+  if (audio_) {
+    audio_->StopEngine();
+    audio_->Release();
+    audio_ = nullptr;
+  }
 
-  delete voice_callback_;
+  if (xaudio2_module_) {
+    FreeLibrary(reinterpret_cast<HMODULE>(xaudio2_module_));
+    xaudio2_module_ = nullptr;
+  }
+
+  if (voice_callback_) {
+    delete voice_callback_;
+    voice_callback_ = nullptr;
+  }
 }
 
 }  // namespace xaudio2

@@ -12,12 +12,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace xe {
 
 class Arena {
  public:
-  Arena(size_t chunk_size = 4 * 1024 * 1024);
+  explicit Arena(size_t chunk_size = 4 * 1024 * 1024);
   ~Arena();
 
   void Reset();
@@ -31,11 +32,16 @@ class Arena {
   void Rewind(size_t size);
 
   void* CloneContents();
+  template <typename T>
+  void CloneContents(std::vector<T>* buffer) {
+    buffer->resize(CalculateSize() / sizeof(T));
+    CloneContents(buffer->data(), buffer->size() * sizeof(T));
+  }
 
  private:
   class Chunk {
    public:
-    Chunk(size_t chunk_size);
+    explicit Chunk(size_t chunk_size);
     ~Chunk();
 
     Chunk* next;
@@ -45,7 +51,9 @@ class Arena {
     size_t offset;
   };
 
- private:
+  size_t CalculateSize();
+  void CloneContents(void* buffer, size_t buffer_length);
+
   size_t chunk_size_;
   Chunk* head_chunk_;
   Chunk* active_chunk_;

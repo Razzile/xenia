@@ -13,8 +13,9 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <vector>
 
-#include "xenia/emulator.h"
+#include "xenia/memory.h"
 #include "xenia/xbox.h"
 
 // XMA audio format:
@@ -24,7 +25,7 @@
 
 // Helpful resources:
 // https://github.com/koolkdev/libertyv/blob/master/libav_wrapper/xma2dec.c
-// http://hcs64.com/mboard/forum.php?showthread=14818
+// https://hcs64.com/mboard/forum.php?showthread=14818
 // https://github.com/hrydgard/minidx9/blob/master/Include/xma2defs.h
 
 // Forward declarations
@@ -40,7 +41,7 @@ namespace apu {
 // We load and swap the whole thing to splat here so that we can
 // use bitfields.
 // This could be important:
-// http://www.fmod.org/questions/question/forum-15859
+// https://www.fmod.org/questions/question/forum-15859
 // Appears to be dumped in order (for the most part)
 
 struct XMA_CONTEXT_DATA {
@@ -60,16 +61,16 @@ struct XMA_CONTEXT_DATA {
   uint32_t input_buffer_1_packet_count : 12;  // XMASetInputBuffer1, number of
                                               // 2KB packets. Max 4095 packets.
                                               // These packets form a block.
-  uint32_t loop_subframe_end : 2;             // +12bit, XMASetLoopData
-  uint32_t unk_dword_1_a : 3;                 // ? might be loop_subframe_skip
+  uint32_t loop_subframe_start : 2;           // +12bit, XMASetLoopData
+  uint32_t loop_subframe_end : 3;             // +14bit, XMASetLoopData
   uint32_t loop_subframe_skip : 3;            // +17bit, XMASetLoopData might be
                                               // subframe_decode_count
-  uint32_t subframe_decode_count : 4;  // +20bit might be subframe_skip_count
-  uint32_t unk_dword_1_b : 3;          // ? NumSubframesToSkip/NumChannels(?)
-  uint32_t sample_rate : 2;            // +27bit enum of sample rates
-  uint32_t is_stereo : 1;              // +29bit
-  uint32_t unk_dword_1_c : 1;          // +30bit
-  uint32_t output_buffer_valid : 1;    // +31bit, XMAIsOutputBufferValid
+  uint32_t subframe_decode_count : 4;         // +20bit
+  uint32_t subframe_skip_count : 3;           // +24bit
+  uint32_t sample_rate : 2;                   // +27bit enum of sample rates
+  uint32_t is_stereo : 1;                     // +29bit
+  uint32_t unk_dword_1_c : 1;                 // +30bit
+  uint32_t output_buffer_valid : 1;           // +31bit, XMAIsOutputBufferValid
 
   // DWORD 2
   uint32_t input_buffer_read_offset : 26;  // XMAGetInputBufferReadOffset
@@ -77,10 +78,12 @@ struct XMA_CONTEXT_DATA {
 
   // DWORD 3
   uint32_t loop_start : 26;  // XMASetLoopData LoopStartOffset
+                             // frame offset in bits
   uint32_t unk_dword_3 : 6;  // ? ParserErrorStatus/ParserErrorSet(?)
 
   // DWORD 4
   uint32_t loop_end : 26;        // XMASetLoopData LoopEndOffset
+                                 // frame offset in bits
   uint32_t packet_metadata : 5;  // XMAGetPacketMetadata
   uint32_t current_buffer : 1;   // ?
 
@@ -91,17 +94,19 @@ struct XMA_CONTEXT_DATA {
   // DWORD 7
   uint32_t output_buffer_ptr;  // physical address
   // DWORD 8
-  uint32_t overlap_add_ptr;  // PtrOverlapAdd(?)
+  uint32_t work_buffer_ptr;  // PtrOverlapAdd(?)
 
   // DWORD 9
   // +0bit, XMAGetOutputBufferReadOffset AKA WriteBufferOffsetRead
   uint32_t output_buffer_read_offset : 5;
-  uint32_t unk_dword_9 : 27;  // StopWhenDone/InterruptWhenDone(?)
+  uint32_t : 25;
+  uint32_t stop_when_done : 1;       // +30bit
+  uint32_t interrupt_when_done : 1;  // +31bit
 
   // DWORD 10-15
   uint32_t unk_dwords_10_15[6];  // reserved?
 
-  XMA_CONTEXT_DATA(const void* ptr) {
+  explicit XMA_CONTEXT_DATA(const void* ptr) {
     xe::copy_and_swap(reinterpret_cast<uint32_t*>(this),
                       reinterpret_cast<const uint32_t*>(ptr),
                       sizeof(XMA_CONTEXT_DATA) / 4);
@@ -133,17 +138,18 @@ class XmaContext {
   static const uint32_t kBytesPerSample = 2;
   static const uint32_t kSamplesPerFrame = 512;
   static const uint32_t kSamplesPerSubframe = 128;
+  static const uint32_t kBytesPerFrame = kSamplesPerFrame * kBytesPerSample;
   static const uint32_t kBytesPerSubframe =
       kSamplesPerSubframe * kBytesPerSample;
 
   static const uint32_t kOutputBytesPerBlock = 256;
   static const uint32_t kOutputMaxSizeBytes = 31 * kOutputBytesPerBlock;
 
-  XmaContext();
+  explicit XmaContext();
   ~XmaContext();
 
   int Setup(uint32_t id, Memory* memory, uint32_t guest_ptr);
-  void Work();
+  bool Work();
 
   void Enable();
   bool Block(bool poll);
@@ -164,37 +170,50 @@ class XmaContext {
  private:
   static int GetSampleRate(int id);
 
-  void DecodePackets(XMA_CONTEXT_DATA& data);
-  int StartPacket(XMA_CONTEXT_DATA& data);
+  size_t SavePartial(uint8_t* packet, uint32_t frame_offset_bits,
+                     size_t frame_size_bits, bool append);
+  bool ValidFrameOffset(uint8_t* block, size_t size_bytes,
+                        size_t frame_offset_bits);
+  void DecodePackets(XMA_CONTEXT_DATA* data);
+  uint32_t GetFramePacketNumber(uint8_t* block, size_t size, size_t bit_offset);
+  int PrepareDecoder(uint8_t* block, size_t size, int sample_rate,
+                     int channels);
+
+  bool ConvertFrame(const uint8_t** samples, int num_channels, int num_samples,
+                    uint8_t* output_buffer);
+
+  int StartPacket(XMA_CONTEXT_DATA* data);
 
   int PreparePacket(uint8_t* input, size_t seq_offset, size_t size,
                     int sample_rate, int channels);
   void DiscardPacket();
 
-  int DecodePacket(uint8_t* output, size_t offset, size_t size);
+  int DecodePacket(uint8_t* output, size_t offset, size_t size,
+                   size_t* read_bytes);
 
-  Memory* memory_;
+  Memory* memory_ = nullptr;
 
-  uint32_t id_;
-  uint32_t guest_ptr_;
-  xe::mutex lock_;
-  bool is_allocated_;
-  bool is_enabled_;
-
-  bool decoding_packet_;
+  uint32_t id_ = 0;
+  uint32_t guest_ptr_ = 0;
+  std::mutex lock_;
+  bool is_allocated_ = false;
+  bool is_enabled_ = false;
 
   // libav structures
-  AVCodec* codec_;
-  AVCodecContext* context_;
-  AVFrame* decoded_frame_;
-  AVPacket* packet_;
+  AVCodec* codec_ = nullptr;
+  AVCodecContext* context_ = nullptr;
+  AVFrame* decoded_frame_ = nullptr;
+  AVPacket* packet_ = nullptr;
   WmaProExtraData extra_data_;
 
-  size_t current_frame_pos_;
-  uint8_t* current_frame_;
-  uint32_t frame_samples_size_;
+  bool partial_frame_saved_ = false;
+  bool partial_frame_size_known_ = false;
+  size_t partial_frame_total_size_bits_ = 0;
+  size_t partial_frame_start_offset_bits_ = 0;
+  size_t partial_frame_offset_bits_ = 0;  // blah internal don't use this
+  std::vector<uint8_t> partial_frame_buffer_;
 
-  uint8_t packet_data_[kBytesPerPacket];
+  uint8_t* current_frame_ = nullptr;
 };
 
 }  // namespace apu

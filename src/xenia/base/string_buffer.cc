@@ -16,14 +16,21 @@
 
 namespace xe {
 
-StringBuffer::StringBuffer(size_t initial_capacity) : buffer_offset_(0) {
+StringBuffer::StringBuffer(size_t initial_capacity) {
   buffer_capacity_ = std::max(initial_capacity, static_cast<size_t>(16 * 1024));
   buffer_ = reinterpret_cast<char*>(malloc(buffer_capacity_));
+  buffer_[0] = 0;
 }
 
-StringBuffer::~StringBuffer() { free(buffer_); }
+StringBuffer::~StringBuffer() {
+  free(buffer_);
+  buffer_ = nullptr;
+}
 
-void StringBuffer::Reset() { buffer_offset_ = 0; }
+void StringBuffer::Reset() {
+  buffer_offset_ = 0;
+  buffer_[0] = 0;
+}
 
 void StringBuffer::Grow(size_t additional_length) {
   if (buffer_offset_ + additional_length <= buffer_capacity_) {
@@ -78,5 +85,11 @@ std::string StringBuffer::to_string() {
 }
 
 char* StringBuffer::ToString() { return strdup(buffer_); }
+
+std::vector<uint8_t> StringBuffer::ToBytes() const {
+  std::vector<uint8_t> bytes(buffer_offset_);
+  std::memcpy(bytes.data(), buffer_, buffer_offset_);
+  return bytes;
+}
 
 }  // namespace xe

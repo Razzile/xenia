@@ -18,17 +18,17 @@ namespace xaudio2 {
 
 class XAudio2AudioSystem : public AudioSystem {
  public:
-  XAudio2AudioSystem(Emulator* emulator);
+  explicit XAudio2AudioSystem(cpu::Processor* processor);
   ~XAudio2AudioSystem() override;
 
-  static std::unique_ptr<AudioSystem> Create(Emulator* emulator);
+  static std::unique_ptr<AudioSystem> Create(cpu::Processor* processor);
 
-  X_RESULT CreateDriver(size_t index, HANDLE semaphore,
+  X_RESULT CreateDriver(size_t index, xe::threading::Semaphore* semaphore,
                         AudioDriver** out_driver) override;
   void DestroyDriver(AudioDriver* driver) override;
 
  protected:
-  virtual void Initialize();
+  void Initialize() override;
 };
 
 }  // namespace xaudio2

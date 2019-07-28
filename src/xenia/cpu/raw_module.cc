@@ -12,6 +12,8 @@
 #include "xenia/base/filesystem.h"
 #include "xenia/base/platform.h"
 #include "xenia/base/string.h"
+#include "xenia/cpu/function.h"
+#include "xenia/cpu/processor.h"
 
 namespace xe {
 namespace cpu {
@@ -31,19 +33,22 @@ bool RawModule::LoadFile(uint32_t base_address, const std::wstring& path) {
   // Allocate memory.
   // Since we have no real heap just load it wherever.
   base_address_ = base_address;
-  memory_->LookupHeap(base_address_)
-      ->AllocFixed(base_address_, file_length, 0,
-                   kMemoryAllocationReserve | kMemoryAllocationCommit,
-                   kMemoryProtectRead | kMemoryProtectWrite);
+  auto heap = memory_->LookupHeap(base_address_);
+  if (!heap ||
+      !heap->AllocFixed(base_address_, file_length, 0,
+                        kMemoryAllocationReserve | kMemoryAllocationCommit,
+                        kMemoryProtectRead | kMemoryProtectWrite)) {
+    return false;
+  }
+
   uint8_t* p = memory_->TranslateVirtual(base_address_);
 
   // Read into memory.
   fread(p, file_length, 1, file);
-
   fclose(file);
 
   // Setup debug info.
-  auto last_slash = fixed_path.find_last_of(xe::path_separator);
+  auto last_slash = fixed_path.find_last_of(xe::kPathSeparator);
   if (last_slash != std::string::npos) {
     name_ = xe::to_string(fixed_path.substr(last_slash + 1));
   } else {
@@ -53,11 +58,28 @@ bool RawModule::LoadFile(uint32_t base_address, const std::wstring& path) {
 
   low_address_ = base_address;
   high_address_ = base_address + file_length;
+
+  // Notify backend about executable code.
+  processor_->backend()->CommitExecutableRange(low_address_, high_address_);
   return true;
+}
+
+void RawModule::SetAddressRange(uint32_t base_address, uint32_t size) {
+  base_address_ = base_address;
+  low_address_ = base_address;
+  high_address_ = base_address + size;
+
+  // Notify backend about executable code.
+  processor_->backend()->CommitExecutableRange(low_address_, high_address_);
 }
 
 bool RawModule::ContainsAddress(uint32_t address) {
   return address >= low_address_ && address < high_address_;
+}
+
+std::unique_ptr<Function> RawModule::CreateFunction(uint32_t address) {
+  return std::unique_ptr<Function>(
+      processor_->backend()->CreateGuestFunction(this, address));
 }
 
 }  // namespace cpu

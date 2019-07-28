@@ -10,81 +10,70 @@
 #ifndef XENIA_BASE_MUTEX_H_
 #define XENIA_BASE_MUTEX_H_
 
-#include <atomic>
 #include <mutex>
-#include <type_traits>
-
-#include "xenia/base/platform.h"
 
 namespace xe {
 
-// This type should be interchangable with std::mutex, only it provides the
-// ability to resume threads that hold the lock when the debugger needs it.
-class mutex {
+// The global critical region mutex singleton.
+// This must guard any operation that may suspend threads or be sensitive to
+// being suspended such as global table locks and such.
+// To prevent deadlocks this should be the first lock acquired and be held
+// for the entire duration of the critical region (longer than any other lock).
+//
+// As a general rule if some code can only be accessed from the guest you can
+// guard it with only the global critical region and be assured nothing else
+// will touch it. If it will be accessed from non-guest threads you may need
+// some additional protection.
+//
+// You can think of this as disabling interrupts in the guest. The thread in the
+// global critical region has exclusive access to the entire system and cannot
+// be preempted. This also means that all activity done while in the critical
+// region must be extremely fast (no IO!), as it has the chance to block any
+// other thread until its done.
+//
+// For example, in the following situation thread 1 will not be able to suspend
+// thread 0 until it has exited its critical region, preventing it from being
+// suspended while holding the table lock:
+//   [thread 0]:
+//     DoKernelStuff():
+//       auto global_lock = global_critical_region_.Acquire();
+//       std::lock_guard<std::mutex> table_lock(table_mutex_);
+//       table_->InsertStuff();
+//   [thread 1]:
+//     MySuspendThread():
+//       auto global_lock = global_critical_region_.Acquire();
+//       ::SuspendThread(thread0);
+//
+// To use the region it's strongly recommended that you keep an instance near
+// the data requiring it. This makes it clear to those reading that the data
+// is protected by the global critical region. For example:
+// class MyType {
+//   // Implies my_list_ is protected:
+//   xe::global_critical_region global_critical_region_;
+//   std::list<...> my_list_;
+// };
+class global_critical_region {
  public:
-  mutex(int _Flags = 0) noexcept {
-    _Mtx_init_in_situ(_Mymtx(), _Flags | _Mtx_try);
+  static std::recursive_mutex& mutex();
+
+  // Acquires a lock on the global critical section.
+  // Use this when keeping an instance is not possible. Otherwise, prefer
+  // to keep an instance of global_critical_region near the members requiring
+  // it to keep things readable.
+  static std::unique_lock<std::recursive_mutex> AcquireDirect() {
+    return std::unique_lock<std::recursive_mutex>(mutex());
   }
 
-  ~mutex() noexcept { _Mtx_destroy_in_situ(_Mymtx()); }
-
-  mutex(const mutex&) = delete;
-  mutex& operator=(const mutex&) = delete;
-
-  void lock() {
-    _Mtx_lock(_Mymtx());
-    holding_thread_ = ::GetCurrentThread();
+  // Acquires a lock on the global critical section.
+  inline std::unique_lock<std::recursive_mutex> Acquire() {
+    return std::unique_lock<std::recursive_mutex>(mutex());
   }
 
-  bool try_lock() {
-    if (_Mtx_trylock(_Mymtx()) == _Thrd_success) {
-      holding_thread_ = ::GetCurrentThread();
-      return true;
-    }
-    return false;
+  // Tries to acquire a lock on the glboal critical section.
+  // Check owns_lock() to see if the lock was successfully acquired.
+  inline std::unique_lock<std::recursive_mutex> TryAcquire() {
+    return std::unique_lock<std::recursive_mutex>(mutex(), std::try_to_lock);
   }
-
-  void lock_as_debugger() {
-    if (_Mtx_trylock(_Mymtx()) == _Thrd_success) {
-      // Nothing holding it.
-      return;
-    }
-    // Resume the thread holding it, which will unlock and suspend itself.
-    debugger_waiting_ = true;
-    ResumeThread(holding_thread_);
-    lock();
-    debugger_waiting_ = false;
-  }
-
-  void unlock() {
-    bool debugger_waiting = debugger_waiting_;
-    _Mtx_unlock(_Mymtx());
-    if (debugger_waiting) {
-      SuspendThread(nullptr);
-    }
-  }
-
-  typedef void* native_handle_type;
-
-  native_handle_type native_handle() { return (_Mtx_getconcrtcs(_Mymtx())); }
-
- private:
-  std::aligned_storage<_Mtx_internal_imp_size,
-                       _Mtx_internal_imp_alignment>::type _Mtx_storage;
-  HANDLE holding_thread_ = nullptr;
-  bool debugger_waiting_ = false;
-
-  _Mtx_t _Mymtx() noexcept { return (reinterpret_cast<_Mtx_t>(&_Mtx_storage)); }
-};
-
-class recursive_mutex : public mutex {
- public:
-  recursive_mutex() : mutex(_Mtx_recursive) {}
-
-  bool try_lock() noexcept { return mutex::try_lock(); }
-
-  recursive_mutex(const recursive_mutex&) = delete;
-  recursive_mutex& operator=(const recursive_mutex&) = delete;
 };
 
 }  // namespace xe

@@ -7,11 +7,12 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_COMPILER_PASSES_REGISTER_ALLOCATION_PASS_H_
-#define XENIA_COMPILER_PASSES_REGISTER_ALLOCATION_PASS_H_
+#ifndef XENIA_CPU_COMPILER_PASSES_REGISTER_ALLOCATION_PASS_H_
+#define XENIA_CPU_COMPILER_PASSES_REGISTER_ALLOCATION_PASS_H_
 
 #include <algorithm>
 #include <bitset>
+#include <functional>
 #include <vector>
 
 #include "xenia/cpu/backend/machine_info.h"
@@ -24,7 +25,7 @@ namespace passes {
 
 class RegisterAllocationPass : public CompilerPass {
  public:
-  RegisterAllocationPass(const backend::MachineInfo* machine_info);
+  explicit RegisterAllocationPass(const backend::MachineInfo* machine_info);
   ~RegisterAllocationPass() override;
 
   bool Run(hir::HIRBuilder* builder) override;
@@ -84,4 +85,4 @@ class RegisterAllocationPass : public CompilerPass {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_COMPILER_PASSES_REGISTER_ALLOCATION_PASS_H_
+#endif  // XENIA_CPU_COMPILER_PASSES_REGISTER_ALLOCATION_PASS_H_

@@ -7,16 +7,17 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_BACKEND_X64_X64_CODE_CACHE_H_
-#define XENIA_BACKEND_X64_X64_CODE_CACHE_H_
+#ifndef XENIA_CPU_BACKEND_X64_X64_CODE_CACHE_H_
+#define XENIA_CPU_BACKEND_X64_X64_CODE_CACHE_H_
 
 #include <atomic>
-#include <mutex>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "xenia/base/memory.h"
 #include "xenia/base/mutex.h"
-#include "xenia/base/platform.h"
 #include "xenia/cpu/backend/code_cache.h"
 
 namespace xe {
@@ -26,10 +27,11 @@ namespace x64 {
 
 class X64CodeCache : public CodeCache {
  public:
-  X64CodeCache();
   ~X64CodeCache() override;
 
-  bool Initialize();
+  static std::unique_ptr<X64CodeCache> Create();
+
+  virtual bool Initialize();
 
   std::wstring file_name() const override { return file_name_; }
   uint32_t base_address() const override { return kGeneratedCodeBase; }
@@ -39,55 +41,78 @@ class X64CodeCache : public CodeCache {
   // TODO(benvanik): keep track of code blocks
   // TODO(benvanik): padding/guards/etc
 
+  bool has_indirection_table() { return indirection_table_base_ != nullptr; }
   void set_indirection_default(uint32_t default_value);
   void AddIndirection(uint32_t guest_address, uint32_t host_address);
 
   void CommitExecutableRange(uint32_t guest_low, uint32_t guest_high);
 
-  void* PlaceCode(uint32_t guest_address, void* machine_code, size_t code_size,
-                  size_t stack_size);
-
+  void* PlaceHostCode(uint32_t guest_address, void* machine_code,
+                      size_t code_size, size_t stack_size);
+  void* PlaceGuestCode(uint32_t guest_address, void* machine_code,
+                       size_t code_size, size_t stack_size,
+                       GuestFunction* function_info);
   uint32_t PlaceData(const void* data, size_t length);
 
- private:
-  const static uint64_t kIndirectionTableBase = 0x80000000;
-  const static uint64_t kIndirectionTableSize = 0x1FFFFFFF;
-  const static uint64_t kGeneratedCodeBase = 0xA0000000;
-  const static uint64_t kGeneratedCodeSize = 0x0FFFFFFF;
+  GuestFunction* LookupFunction(uint64_t host_pc) override;
 
-  void InitializeUnwindEntry(uint8_t* unwind_entry_address,
-                             size_t unwind_table_slot, uint8_t* code_address,
-                             size_t code_size, size_t stack_size);
-  void* LookupUnwindEntry(uintptr_t host_address);
+ protected:
+  // All executable code falls within 0x80000000 to 0x9FFFFFFF, so we can
+  // only map enough for lookups within that range.
+  static const uint64_t kIndirectionTableBase = 0x80000000;
+  static const uint64_t kIndirectionTableSize = 0x1FFFFFFF;
+  // The code range is 512MB, but we know the total code games will have is
+  // pretty small (dozens of mb at most) and our expansion is reasonablish
+  // so 256MB should be more than enough.
+  static const uint64_t kGeneratedCodeBase = 0xA0000000;
+  static const uint64_t kGeneratedCodeSize = 0x0FFFFFFF;
+
+  // This is picked to be high enough to cover whatever we can reasonably
+  // expect. If we hit issues with this it probably means some corner case
+  // in analysis triggering.
+  static const size_t kMaximumFunctionCount = 50000;
+
+  struct UnwindReservation {
+    size_t data_size = 0;
+    size_t table_slot = 0;
+    uint8_t* entry_address = 0;
+  };
+
+  X64CodeCache();
+
+  virtual UnwindReservation RequestUnwindReservation(uint8_t* entry_address) {
+    return UnwindReservation();
+  }
+  virtual void PlaceCode(uint32_t guest_address, void* machine_code,
+                         size_t code_size, size_t stack_size,
+                         void* code_address,
+                         UnwindReservation unwind_reservation) {}
 
   std::wstring file_name_;
-  HANDLE mapping_;
+  xe::memory::FileMappingHandle mapping_ = nullptr;
 
-  // Must be held when manipulating the offsets or counts of anything, to keep
-  // the tables consistent and ordered.
-  xe::mutex allocation_mutex_;
+  // NOTE: the global critical region must be held when manipulating the offsets
+  // or counts of anything, to keep the tables consistent and ordered.
+  xe::global_critical_region global_critical_region_;
 
   // Value that the indirection table will be initialized with upon commit.
-  uint32_t indirection_default_value_;
+  uint32_t indirection_default_value_ = 0xFEEDF00D;
 
   // Fixed at kIndirectionTableBase in host space, holding 4 byte pointers into
   // the generated code table that correspond to the PPC functions in guest
   // space.
-  uint8_t* indirection_table_base_;
+  uint8_t* indirection_table_base_ = nullptr;
   // Fixed at kGeneratedCodeBase and holding all generated code, growing as
   // needed.
-  uint8_t* generated_code_base_;
+  uint8_t* generated_code_base_ = nullptr;
   // Current offset to empty space in generated code.
-  size_t generated_code_offset_;
+  size_t generated_code_offset_ = 0;
   // Current high water mark of COMMITTED code.
-  std::atomic<size_t> generated_code_commit_mark_;
-
-  // Growable function table system handle.
-  void* unwind_table_handle_;
-  // Actual unwind table entries.
-  std::vector<RUNTIME_FUNCTION> unwind_table_;
-  // Current number of entries in the table.
-  std::atomic<uint32_t> unwind_table_count_;
+  std::atomic<size_t> generated_code_commit_mark_ = {0};
+  // Sorted map by host PC base offsets to source function info.
+  // This can be used to bsearch on host PC to find the guest function.
+  // The key is [start address | end address].
+  std::vector<std::pair<uint64_t, GuestFunction*>> generated_code_map_;
 };
 
 }  // namespace x64
@@ -95,4 +120,4 @@ class X64CodeCache : public CodeCache {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_BACKEND_X64_X64_CODE_CACHE_H_
+#endif  // XENIA_CPU_BACKEND_X64_X64_CODE_CACHE_H_

@@ -7,8 +7,8 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_HIR_VALUE_H_
-#define XENIA_HIR_VALUE_H_
+#ifndef XENIA_CPU_HIR_VALUE_H_
+#define XENIA_CPU_HIR_VALUE_H_
 
 #include "xenia/base/arena.h"
 #include "xenia/base/assert.h"
@@ -77,9 +77,13 @@ class Value {
   } Use;
   typedef union {
     int8_t i8;
+    uint8_t u8;
     int16_t i16;
+    uint16_t u16;
     int32_t i32;
+    uint32_t u32;
     int64_t i64;
+    uint64_t u64;
     float f32;
     double f64;
     vec128_t v128;
@@ -105,16 +109,8 @@ class Value {
   Use* AddUse(Arena* arena, Instr* instr);
   void RemoveUse(Use* use);
 
-  int8_t get_constant(int8_t) const { return constant.i8; }
-  int16_t get_constant(int16_t) const { return constant.i16; }
-  int32_t get_constant(int32_t) const { return constant.i32; }
-  int64_t get_constant(int64_t) const { return constant.i64; }
-  float get_constant(float) const { return constant.f32; }
-  double get_constant(double) const { return constant.f64; }
-  vec128_t get_constant(vec128_t&) const { return constant.v128; }
-
-  void set_zero(TypeName type) {
-    this->type = type;
+  void set_zero(TypeName new_type) {
+    type = new_type;
     flags |= VALUE_IS_CONSTANT;
     constant.v128.low = constant.v128.high = 0;
   }
@@ -174,6 +170,7 @@ class Value {
     constant.v128 = value;
   }
   void set_from(const Value* other) {
+    assert_true(other->IsConstant());
     type = other->type;
     flags = other->flags;
     constant.v128 = other->constant.v128;
@@ -198,6 +195,8 @@ class Value {
           return !!constant.f32;
         case FLOAT64_TYPE:
           return !!constant.f64;
+        case VEC128_TYPE:
+          return constant.v128.low || constant.v128.high;
         default:
           assert_unhandled_case(type);
           return false;
@@ -207,9 +206,6 @@ class Value {
     }
   }
   bool IsConstantFalse() const {
-    if (type == VEC128_TYPE) {
-      assert_always();
-    }
     if (flags & VALUE_IS_CONSTANT) {
       switch (type) {
         case INT8_TYPE:
@@ -224,6 +220,8 @@ class Value {
           return !constant.f32;
         case FLOAT64_TYPE:
           return !constant.f64;
+        case VEC128_TYPE:
+          return !(constant.v128.low || constant.v128.high);
         default:
           assert_unhandled_case(type);
           return false;
@@ -249,6 +247,29 @@ class Value {
           return !constant.f64;
         case VEC128_TYPE:
           return !constant.v128.low && !constant.v128.high;
+        default:
+          assert_unhandled_case(type);
+          return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  bool IsConstantOne() const {
+    if (flags & VALUE_IS_CONSTANT) {
+      switch (type) {
+        case INT8_TYPE:
+          return constant.i8 == 1;
+        case INT16_TYPE:
+          return constant.i16 == 1;
+        case INT32_TYPE:
+          return constant.i32 == 1;
+        case INT64_TYPE:
+          return constant.i64 == 1;
+        case FLOAT32_TYPE:
+          return constant.f32 == 1.f;
+        case FLOAT64_TYPE:
+          return constant.f64 == 1.0;
         default:
           assert_unhandled_case(type);
           return false;
@@ -483,12 +504,14 @@ class Value {
   void Mul(Value* other);
   void MulHi(Value* other, bool is_unsigned);
   void Div(Value* other, bool is_unsigned);
+  void Max(Value* other);
   static void MulAdd(Value* dest, Value* value1, Value* value2, Value* value3);
   static void MulSub(Value* dest, Value* value1, Value* value2, Value* value3);
   void Neg();
   void Abs();
   void Sqrt();
   void RSqrt();
+  void Recip();
   void And(Value* other);
   void Or(Value* other);
   void Xor(Value* other);
@@ -496,6 +519,25 @@ class Value {
   void Shl(Value* other);
   void Shr(Value* other);
   void Sha(Value* other);
+  void Extract(Value* vec, Value* index);
+  void Select(Value* other, Value* ctrl);
+  void Splat(Value* other);
+  void VectorCompareEQ(Value* other, TypeName type);
+  void VectorCompareSGT(Value* other, TypeName type);
+  void VectorCompareSGE(Value* other, TypeName type);
+  void VectorCompareUGT(Value* other, TypeName type);
+  void VectorCompareUGE(Value* other, TypeName type);
+  void VectorConvertI2F(Value* other, bool is_unsigned);
+  void VectorConvertF2I(Value* other, bool is_unsigned);
+  void VectorShl(Value* other, TypeName type);
+  void VectorShr(Value* other, TypeName type);
+  void VectorRol(Value* other, TypeName type);
+  void VectorAdd(Value* other, TypeName type, bool is_unsigned, bool saturate);
+  void VectorSub(Value* other, TypeName type, bool is_unsigned, bool saturate);
+  void DotProduct3(Value* other);
+  void DotProduct4(Value* other);
+  void VectorAverage(Value* other, TypeName type, bool is_unsigned,
+                     bool saturate);
   void ByteSwap();
   void CountLeadingZeros(const Value* other);
   bool Compare(Opcode opcode, Value* other);
@@ -511,4 +553,4 @@ class Value {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_HIR_VALUE_H_
+#endif  // XENIA_CPU_HIR_VALUE_H_

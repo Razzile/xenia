@@ -26,8 +26,10 @@ class HostPathDevice : public Device {
   ~HostPathDevice() override;
 
   bool Initialize() override;
+  void Dump(StringBuffer* string_buffer) override;
+  Entry* ResolvePath(std::string path) override;
 
-  bool is_read_only() const { return read_only_; }
+  bool is_read_only() const override { return read_only_; }
 
   uint32_t total_allocation_units() const override { return 128 * 1024; }
   uint32_t available_allocation_units() const override { return 128 * 1024; }
@@ -38,6 +40,7 @@ class HostPathDevice : public Device {
   void PopulateEntry(HostPathEntry* parent_entry);
 
   std::wstring local_path_;
+  std::unique_ptr<Entry> root_entry_;
   bool read_only_;
 };
 

@@ -7,15 +7,15 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_HIR_INSTR_H_
-#define XENIA_HIR_INSTR_H_
+#ifndef XENIA_CPU_HIR_INSTR_H_
+#define XENIA_CPU_HIR_INSTR_H_
 
 #include "xenia/cpu/hir/opcodes.h"
 #include "xenia/cpu/hir/value.h"
 
 namespace xe {
 namespace cpu {
-class FunctionInfo;
+class Function;
 }  // namespace cpu
 }  // namespace xe
 
@@ -37,7 +37,7 @@ class Instr {
   uint32_t ordinal;
 
   typedef union {
-    FunctionInfo* symbol_info;
+    Function* symbol;
     Label* label;
     Value* value;
     uint64_t offset;
@@ -57,7 +57,7 @@ class Instr {
   void set_src3(Value* value);
 
   void MoveBefore(Instr* other);
-  void Replace(const OpcodeInfo* opcode, uint16_t flags);
+  void Replace(const OpcodeInfo* new_opcode, uint16_t new_flags);
   void Remove();
 };
 
@@ -65,4 +65,4 @@ class Instr {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_HIR_INSTR_H_
+#endif  // XENIA_CPU_HIR_INSTR_H_

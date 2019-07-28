@@ -14,45 +14,60 @@
 #include <vector>
 
 #include "xenia/base/math.h"
-#include "xenia/cpu/frontend/ppc_context.h"
+#include "xenia/cpu/ppc/ppc_context.h"
 
 namespace xe {
 namespace cpu {
 
+enum class ExportCategory : uint8_t {
+  kNone = 0,
+  kAudio,
+  kAvatars,
+  kContent,
+  kDebug,
+  kFileSystem,
+  kInput,
+  kMemory,
+  kMisc,
+  kModules,
+  kNetworking,
+  kThreading,
+  kUI,
+  kUserProfiles,
+  kVideo,
+};
+
 struct ExportTag {
   typedef uint32_t type;
 
-  // Export is implemented in some form and can be used.
-  static const type kImplemented = 1 << 0;
-  // Export is a stub and is probably bad.
-  static const type kStub = 1 << 1;
-  // Export is known to cause problems, or may not be complete.
-  static const type kSketchy = 1 << 2;
-  // Export is called *a lot*.
-  static const type kHighFrequency = 1 << 3;
-  // Export is important and should always be logged.
-  static const type kImportant = 1 << 4;
+  // packed like so:
+  // ll...... cccccccc ........ ..bihssi
 
-  static const type kThreading = 1 << 10;
-  static const type kInput = 1 << 11;
-  static const type kAudio = 1 << 12;
-  static const type kVideo = 1 << 13;
-  static const type kFileSystem = 1 << 14;
-  static const type kModules = 1 << 15;
-  static const type kUserProfiles = 1 << 16;
-  static const type kNetworking = 1 << 17;
-  static const type kMemory = 1 << 18;
+  static const int CategoryShift = 16;
+
+  // Export is implemented in some form and can be used.
+  static const type kImplemented = 1u << 0;
+  // Export is a stub and is probably bad.
+  static const type kStub = 1u << 1;
+  // Export is known to cause problems, or may not be complete.
+  static const type kSketchy = 1u << 2;
+  // Export is called *a lot*.
+  static const type kHighFrequency = 1u << 3;
+  // Export is important and should always be logged.
+  static const type kImportant = 1u << 4;
+  // Export blocks the calling thread
+  static const type kBlocking = 1u << 5;
 
   // Export will be logged on each call.
-  static const type kLog = 1 << 30;
+  static const type kLog = 1u << 30;
   // Export's result will be logged on each call.
-  static const type kLogResult = 1 << 31;
+  static const type kLogResult = 1u << 31;
 };
 
 // DEPRECATED
 typedef void (*xe_kernel_export_shim_fn)(void*, void*);
 
-typedef void (*ExportTrampoline)(xe::cpu::frontend::PPCContext* ppc_context);
+typedef void (*ExportTrampoline)(ppc::PPCContext* ppc_context);
 
 class Export {
  public:
@@ -66,7 +81,6 @@ class Export {
       : ordinal(ordinal),
         type(type),
         tags(tags),
-        variable_ptr(0),
         function_data({nullptr, nullptr, 0}) {
     std::strncpy(this->name, name, xe::countof(this->name));
   }
@@ -100,37 +114,46 @@ class Export {
 
 class ExportResolver {
  public:
+  class Table {
+   public:
+    Table(const char* module_name, const std::vector<Export*>* exports);
+
+    const char* module_name() const { return module_name_; }
+    const std::vector<Export*>& exports_by_ordinal() const {
+      return *exports_by_ordinal_;
+    }
+    const std::vector<Export*>& exports_by_name() const {
+      return exports_by_name_;
+    }
+
+   private:
+    char module_name_[32] = {0};
+    const std::vector<Export*>* exports_by_ordinal_ = nullptr;
+    std::vector<Export*> exports_by_name_;
+  };
+
   ExportResolver();
   ~ExportResolver();
 
-  void RegisterTable(const std::string& library_name,
+  void RegisterTable(const char* module_name,
                      const std::vector<Export*>* exports);
+  const std::vector<Table>& tables() const { return tables_; }
+  const std::vector<Export*>& all_exports_by_name() const {
+    return all_exports_by_name_;
+  }
 
-  Export* GetExportByOrdinal(const std::string& library_name, uint16_t ordinal);
+  Export* GetExportByOrdinal(const char* module_name, uint16_t ordinal);
 
-  void SetVariableMapping(const std::string& library_name, uint16_t ordinal,
+  void SetVariableMapping(const char* module_name, uint16_t ordinal,
                           uint32_t value);
-  void SetFunctionMapping(const std::string& library_name, uint16_t ordinal,
+  void SetFunctionMapping(const char* module_name, uint16_t ordinal,
                           xe_kernel_export_shim_fn shim);
-  void SetFunctionMapping(const std::string& library_name, uint16_t ordinal,
+  void SetFunctionMapping(const char* module_name, uint16_t ordinal,
                           ExportTrampoline trampoline);
 
  private:
-  struct ExportTable {
-    std::string name;
-    std::string simple_name;  // without extension
-    const std::vector<Export*>* exports;
-    ExportTable(const std::string& name, const std::vector<Export*>* exports)
-        : name(name), exports(exports) {
-      auto dot_pos = name.find_last_of('.');
-      if (dot_pos != std::string::npos) {
-        simple_name = name.substr(0, dot_pos);
-      } else {
-        simple_name = name;
-      }
-    }
-  };
-  std::vector<ExportTable> tables_;
+  std::vector<Table> tables_;
+  std::vector<Export*> all_exports_by_name_;
 };
 
 }  // namespace cpu

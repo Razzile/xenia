@@ -30,11 +30,15 @@ class TestModule : public Module {
   ~TestModule() override;
 
   const std::string& name() const override { return name_; }
+  bool is_executable() const override { return false; }
 
   bool ContainsAddress(uint32_t address) override;
 
-  SymbolStatus DeclareFunction(uint32_t address,
-                               FunctionInfo** out_symbol_info) override;
+  Symbol::Status DeclareFunction(uint32_t address,
+                                 Function** out_symbol) override;
+
+ protected:
+  std::unique_ptr<Function> CreateFunction(uint32_t address) override;
 
  private:
   std::string name_;

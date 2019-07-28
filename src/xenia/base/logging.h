@@ -7,99 +7,77 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_LOGGING_H_
-#define XENIA_LOGGING_H_
+#ifndef XENIA_BASE_LOGGING_H_
+#define XENIA_BASE_LOGGING_H_
 
 #include <cstdint>
+#include <string>
 
 #include "xenia/base/string.h"
 
 namespace xe {
 
 #define XE_OPTION_ENABLE_LOGGING 1
-#define XE_OPTION_LOG_ERROR 1
-#define XE_OPTION_LOG_WARNING 1
-#define XE_OPTION_LOG_INFO 1
-#define XE_OPTION_LOG_DEBUG 1
-#define XE_OPTION_LOG_CPU 1
-#define XE_OPTION_LOG_APU 1
-#define XE_OPTION_LOG_GPU 1
-#define XE_OPTION_LOG_KERNEL 1
-#define XE_OPTION_LOG_FS 1
 
-#define XE_EMPTY_MACRO \
-  do {                 \
-  } while (false)
+// Log level is a general indication of the importance of a given log line.
+//
+// While log levels are named, they are a rough correlation of what the log line
+// may be related to. These names should not be taken as fact as what a given
+// log line from any log level actually is.
+enum class LogLevel {
+  Error = 0,
+  Warning,
+  Info,
+  Debug,
+  Trace,
+};
 
-#if XE_COMPILER_GNUC
-#define XE_LOG_LINE_ATTRIBUTE __attribute__((format(printf, 5, 6)))
-#else
-#define XE_LOG_LINE_ATTRIBUTE
-#endif  // XE_COMPILER_GNUC
-void log_line(const char level_char, const char* fmt,
-              ...) XE_LOG_LINE_ATTRIBUTE;
-#undef XE_LOG_LINE_ATTRIBUTE
+// Initializes the logging system and any outputs requested.
+// Must be called on startup.
+void InitializeLogging(const std::wstring& app_name);
+void ShutdownLogging();
 
-void handle_fatal(const char* fmt, ...);
+// Appends a line to the log with printf-style formatting.
+void LogLineFormat(LogLevel log_level, const char prefix_char, const char* fmt,
+                   ...);
+void LogLineVarargs(LogLevel log_level, const char prefix_char, const char* fmt,
+                    va_list args);
+// Appends a line to the log.
+void LogLine(LogLevel log_level, const char prefix_char, const char* str,
+             size_t str_length = std::string::npos);
+void LogLine(LogLevel log_level, const char prefix_char,
+             const std::string& str);
+
+// Logs a fatal error with printf-style formatting and aborts the program.
+void FatalError(const char* fmt, ...);
+// Logs a fatal error and aborts the program.
+void FatalError(const std::string& str);
 
 #if XE_OPTION_ENABLE_LOGGING
-#define XELOGCORE(level, fmt, ...) xe::log_line(level, fmt, ##__VA_ARGS__)
+#define XELOGCORE(level, prefix, fmt, ...) \
+  xe::LogLineFormat(level, prefix, fmt, ##__VA_ARGS__)
 #else
-#define XELOGCORE(level, fmt, ...) XE_EMPTY_MACRO
+#define XELOGCORE(level, fmt, ...) \
+  do {                             \
+  } while (false)
 #endif  // ENABLE_LOGGING
 
-#define XEFATAL(fmt, ...)                 \
-  do {                                    \
-    xe::handle_fatal(fmt, ##__VA_ARGS__); \
-  } while (false)
+#define XELOGE(fmt, ...) XELOGCORE(xe::LogLevel::Error, '!', fmt, ##__VA_ARGS__)
+#define XELOGW(fmt, ...) \
+  XELOGCORE(xe::LogLevel::Warning, 'w', fmt, ##__VA_ARGS__)
+#define XELOGI(fmt, ...) XELOGCORE(xe::LogLevel::Info, 'i', fmt, ##__VA_ARGS__)
+#define XELOGD(fmt, ...) XELOGCORE(xe::LogLevel::Debug, 'd', fmt, ##__VA_ARGS__)
 
-#if XE_OPTION_LOG_ERROR
-#define XELOGE(fmt, ...) XELOGCORE('!', fmt, ##__VA_ARGS__)
-#else
-#define XELOGE(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_WARNING
-#define XELOGW(fmt, ...) XELOGCORE('w', fmt, ##__VA_ARGS__)
-#else
-#define XELOGW(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_INFO
-#define XELOGI(fmt, ...) XELOGCORE('i', fmt, ##__VA_ARGS__)
-#else
-#define XELOGI(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_DEBUG
-#define XELOGD(fmt, ...) XELOGCORE('d', fmt, ##__VA_ARGS__)
-#else
-#define XELOGD(fmt, ...) XE_EMPTY_MACRO
-#endif
-
-#if XE_OPTION_LOG_CPU
-#define XELOGCPU(fmt, ...) XELOGCORE('C', fmt, ##__VA_ARGS__)
-#else
-#define XELOGCPU(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_APU
-#define XELOGAPU(fmt, ...) XELOGCORE('A', fmt, ##__VA_ARGS__)
-#else
-#define XELOGAPU(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_GPU
-#define XELOGGPU(fmt, ...) XELOGCORE('G', fmt, ##__VA_ARGS__)
-#else
-#define XELOGGPU(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_KERNEL
-#define XELOGKERNEL(fmt, ...) XELOGCORE('K', fmt, ##__VA_ARGS__)
-#else
-#define XELOGKERNEL(fmt, ...) XE_EMPTY_MACRO
-#endif
-#if XE_OPTION_LOG_FS
-#define XELOGFS(fmt, ...) XELOGCORE('F', fmt, ##__VA_ARGS__)
-#else
-#define XELOGFS(fmt, ...) XE_EMPTY_MACRO
-#endif
+#define XELOGCPU(fmt, ...) \
+  XELOGCORE(xe::LogLevel::Info, 'C', fmt, ##__VA_ARGS__)
+#define XELOGAPU(fmt, ...) \
+  XELOGCORE(xe::LogLevel::Info, 'A', fmt, ##__VA_ARGS__)
+#define XELOGGPU(fmt, ...) \
+  XELOGCORE(xe::LogLevel::Info, 'G', fmt, ##__VA_ARGS__)
+#define XELOGKERNEL(fmt, ...) \
+  XELOGCORE(xe::LogLevel::Info, 'K', fmt, ##__VA_ARGS__)
+#define XELOGFS(fmt, ...) XELOGCORE(xe::LogLevel::Info, 'F', fmt, ##__VA_ARGS__)
 
 }  // namespace xe
 
-#endif  // XENIA_LOGGING_H_
+#endif  // XENIA_BASE_LOGGING_H_

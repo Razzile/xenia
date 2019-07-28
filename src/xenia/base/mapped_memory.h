@@ -33,13 +33,19 @@ class MappedMemory {
   virtual ~MappedMemory() = default;
 
   std::unique_ptr<MappedMemory> Slice(Mode mode, size_t offset, size_t length) {
-    return std::make_unique<MappedMemory>(path_, mode, data() + offset, length);
+    return std::unique_ptr<MappedMemory>(
+        new MappedMemory(path_, mode, data() + offset, length));
   }
 
   uint8_t* data() const { return reinterpret_cast<uint8_t*>(data_); }
   size_t size() const { return size_; }
 
+  // Close, and optionally truncate file to size
+  virtual void Close(uint64_t truncate_size = 0) {}
   virtual void Flush() {}
+
+  // Changes the offset inside the file. This will update data() and size()!
+  virtual bool Remap(size_t offset, size_t length) { return false; }
 
  protected:
   std::wstring path_;

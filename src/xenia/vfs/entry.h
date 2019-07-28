@@ -14,15 +14,14 @@
 #include <string>
 #include <vector>
 
+#include "xenia/base/filesystem.h"
+#include "xenia/base/filesystem_wildcard.h"
 #include "xenia/base/mapped_memory.h"
+#include "xenia/base/mutex.h"
 #include "xenia/base/string_buffer.h"
-#include "xenia/kernel/xobject.h"
 #include "xenia/xbox.h"
 
 namespace xe {
-namespace filesystem {
-class WildcardEngine;
-}  // namespace filesystem
 namespace kernel {
 class KernelState;
 class XFile;
@@ -32,11 +31,10 @@ class XFile;
 namespace xe {
 namespace vfs {
 
-using namespace xe::kernel;
-
 class Device;
+class File;
 
-// Matches http://source.winehq.org/source/include/winternl.h#1591.
+// Matches https://source.winehq.org/source/include/winternl.h#1591.
 enum class FileAction {
   kSuperseded = 0,
   kOpened = 1,
@@ -61,17 +59,8 @@ enum class FileDisposition {
   kOverwriteIf = 5,
 };
 
-struct FileAccess {
-  // Implies kFileReadData.
-  static const uint32_t kGenericRead = 0x80000000;
-  // Implies kFileWriteData.
-  static const uint32_t kGenericWrite = 0x40000000;
-  static const uint32_t kGenericExecute = 0x20000000;
-  static const uint32_t kGenericAll = 0x10000000;
-  static const uint32_t kFileReadData = 0x00000001;
-  static const uint32_t kFileWriteData = 0x00000002;
-  static const uint32_t kFileAppendData = 0x00000004;
-};
+// Reuse xe::filesystem definition.
+using FileAccess = xe::filesystem::FileAccess;
 
 enum FileAttributeFlags : uint32_t {
   kFileAttributeNone = 0x0000,
@@ -109,6 +98,9 @@ class Entry {
 
   Entry* GetChild(std::string name);
 
+  const std::vector<std::unique_ptr<Entry>>& children() const {
+    return children_;
+  }
   size_t child_count() const { return children_.size(); }
   Entry* IterateChildren(const xe::filesystem::WildcardEngine& engine,
                          size_t* current_index);
@@ -118,8 +110,9 @@ class Entry {
   bool Delete();
   void Touch();
 
-  virtual X_STATUS Open(KernelState* kernel_state, uint32_t desired_access,
-                        object_ref<XFile>* out_file) = 0;
+  // If successful, out_file points to a new file. When finished, call
+  // file->Destroy()
+  virtual X_STATUS Open(uint32_t desired_access, File** out_file) = 0;
 
   virtual bool can_map() const { return false; }
   virtual std::unique_ptr<MappedMemory> OpenMapped(MappedMemory::Mode mode,
@@ -137,6 +130,7 @@ class Entry {
   }
   virtual bool DeleteEntryInternal(Entry* entry) { return false; }
 
+  xe::global_critical_region global_critical_region_;
   Device* device_;
   Entry* parent_;
   std::string path_;

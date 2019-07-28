@@ -13,8 +13,8 @@
 
 #include <algorithm>
 #include <cstring>
-#include <mutex>
 
+#include "xenia/base/byte_stream.h"
 #include "xenia/base/clock.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/math.h"
@@ -24,12 +24,9 @@
 // TODO(benvanik): move xbox.h out
 #include "xenia/xbox.h"
 
-#if !XE_PLATFORM_WIN32
-#include <sys/mman.h>
-#endif  // WIN32
-
-DEFINE_bool(protect_zero, false,
-            "Protect the zero page from reads and writes.");
+DEFINE_bool(protect_zero, true, "Protect the zero page from reads and writes.");
+DEFINE_bool(protect_on_release, false,
+            "Protect released memory to prevent accesses.");
 
 DEFINE_bool(scribble_heap, false,
             "Scribble 0xCD into all allocated heap memory.");
@@ -74,15 +71,19 @@ uint32_t get_page_count(uint32_t value, uint32_t page_size) {
 
 static Memory* active_memory_ = nullptr;
 
-void CrashDump() { active_memory_->DumpMap(); }
+void CrashDump() {
+  static std::atomic<int> in_crash_dump(0);
+  if (in_crash_dump.fetch_add(1)) {
+    xe::FatalError(
+        "Hard crash: the memory system crashed while dumping a crash dump.");
+    return;
+  }
+  active_memory_->DumpMap();
+  --in_crash_dump;
+}
 
-Memory::Memory()
-    : virtual_membase_(nullptr),
-      physical_membase_(nullptr),
-      reserve_address_(0),
-      mapping_(0),
-      mapping_base_(nullptr) {
-  system_page_size_ = uint32_t(xe::page_size());
+Memory::Memory() {
+  system_page_size_ = uint32_t(xe::memory::page_size());
   assert_zero(active_memory_);
   active_memory_ = this;
 }
@@ -107,44 +108,36 @@ Memory::~Memory() {
   // Unmap all views and close mapping.
   if (mapping_) {
     UnmapViews();
-    CloseHandle(mapping_);
-    mapping_base_ = 0;
-    mapping_ = 0;
+    xe::memory::CloseFileMappingHandle(mapping_);
+    mapping_base_ = nullptr;
+    mapping_ = nullptr;
   }
 
   virtual_membase_ = nullptr;
   physical_membase_ = nullptr;
 }
 
-int Memory::Initialize() {
-  wchar_t file_name[256];
-  wsprintf(file_name, L"Local\\xenia_memory_%p", Clock::QueryHostTickCount());
-  file_name_ = file_name;
+bool Memory::Initialize() {
+  file_name_ = std::wstring(L"Local\\xenia_memory_") +
+               std::to_wstring(Clock::QueryHostTickCount());
 
-// Create main page file-backed mapping. This is all reserved but
-// uncommitted (so it shouldn't expand page file).
-#if XE_PLATFORM_WIN32
-  mapping_ = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
-                               PAGE_READWRITE | SEC_RESERVE,
-                               // entire 4gb space + 512mb physical:
-                               1, 0x1FFFFFFF, file_name_.c_str());
-#else
-  char mapping_path[] = "/xenia/mapping/XXXXXX";
-  mktemp(mapping_path);
-  mapping_ = shm_open(mapping_path, O_CREAT, 0);
-  ftruncate(mapping_, 0x11FFFFFFF);
-#endif  // XE_PLATFORM_WIN32
+  // Create main page file-backed mapping. This is all reserved but
+  // uncommitted (so it shouldn't expand page file).
+  mapping_ = xe::memory::CreateFileMappingHandle(
+      file_name_,
+      // entire 4gb space + 512mb physical:
+      0x11FFFFFFF, xe::memory::PageAccess::kReadWrite, false);
   if (!mapping_) {
     XELOGE("Unable to reserve the 4gb guest address space.");
     assert_not_null(mapping_);
-    return 1;
+    return false;
   }
 
   // Attempt to create our views. This may fail at the first address
   // we pick, so try a few times.
   mapping_base_ = 0;
   for (size_t n = 32; n < 64; n++) {
-    uint8_t* mapping_base = (uint8_t*)(1ull << n);
+    auto mapping_base = reinterpret_cast<uint8_t*>(1ull << n);
     if (!MapViews(mapping_base)) {
       mapping_base_ = mapping_base;
       break;
@@ -153,7 +146,7 @@ int Memory::Initialize() {
   if (!mapping_base_) {
     XELOGE("Unable to find a continuous block in the 64bit address space.");
     assert_always();
-    return 1;
+    return false;
   }
   virtual_membase_ = mapping_base_;
   physical_membase_ = mapping_base_ + 0x100000000ull;
@@ -178,12 +171,14 @@ int Memory::Initialize() {
   heaps_.vE0000000.Initialize(virtual_membase_, 0xE0000000, 0x1FD00000, 4096,
                               &heaps_.physical);
 
-  // Take the first page at 0 so we can check for writes.
+  // Protect the first and last 64kb of memory.
   heaps_.v00000000.AllocFixed(
-      0x00000000, 64 * 1024, 64 * 1024,
+      0x00000000, 0x10000, 0x10000,
       kMemoryAllocationReserve | kMemoryAllocationCommit,
       !FLAGS_protect_zero ? kMemoryProtectRead | kMemoryProtectWrite
                           : kMemoryProtectNoAccess);
+  heaps_.physical.AllocFixed(0x1FFF0000, 0x10000, 0x10000,
+                             kMemoryAllocationReserve, kMemoryProtectNoAccess);
 
   // GPU writeback.
   // 0xC... is physical, 0x7F... is virtual. We may need to overlay these.
@@ -193,12 +188,12 @@ int Memory::Initialize() {
       kMemoryProtectRead | kMemoryProtectWrite);
 
   // Add handlers for MMIO.
-  mmio_handler_ =
-      cpu::MMIOHandler::Install(virtual_membase_, physical_membase_);
+  mmio_handler_ = cpu::MMIOHandler::Install(virtual_membase_, physical_membase_,
+                                            physical_membase_ + 0x1FFFFFFF);
   if (!mmio_handler_) {
     XELOGE("Unable to install MMIO handlers");
     assert_always();
-    return 1;
+    return false;
   }
 
   // ?
@@ -206,51 +201,76 @@ int Memory::Initialize() {
   heaps_.vA0000000.Alloc(0x340000, 64 * 1024, kMemoryAllocationReserve,
                          kMemoryProtectNoAccess, true, &unk_phys_alloc);
 
-  return 0;
+  return true;
 }
 
-const static struct {
+static const struct {
   uint64_t virtual_address_start;
   uint64_t virtual_address_end;
   uint64_t target_address;
 } map_info[] = {
     // (1024mb) - virtual 4k pages
-    0x00000000, 0x3FFFFFFF, 0x0000000000000000ull,
+    {
+        0x00000000,
+        0x3FFFFFFF,
+        0x0000000000000000ull,
+    },
     // (1024mb) - virtual 64k pages (cont)
-    0x40000000, 0x7EFFFFFF, 0x0000000040000000ull,
+    {
+        0x40000000,
+        0x7EFFFFFF,
+        0x0000000040000000ull,
+    },
     //   (16mb) - GPU writeback + 15mb of XPS?
-    0x7F000000, 0x7FFFFFFF, 0x0000000100000000ull,
+    {
+        0x7F000000,
+        0x7FFFFFFF,
+        0x0000000100000000ull,
+    },
     //  (256mb) - xex 64k pages
-    0x80000000, 0x8FFFFFFF, 0x0000000080000000ull,
+    {
+        0x80000000,
+        0x8FFFFFFF,
+        0x0000000080000000ull,
+    },
     //  (256mb) - xex 4k pages
-    0x90000000, 0x9FFFFFFF, 0x0000000080000000ull,
+    {
+        0x90000000,
+        0x9FFFFFFF,
+        0x0000000080000000ull,
+    },
     //  (512mb) - physical 64k pages
-    0xA0000000, 0xBFFFFFFF, 0x0000000100000000ull,
+    {
+        0xA0000000,
+        0xBFFFFFFF,
+        0x0000000100000000ull,
+    },
     //          - physical 16mb pages
-    0xC0000000, 0xDFFFFFFF, 0x0000000100000000ull,
+    {
+        0xC0000000,
+        0xDFFFFFFF,
+        0x0000000100000000ull,
+    },
     //          - physical 4k pages
-    0xE0000000, 0xFFFFFFFF, 0x0000000100000000ull,
+    {
+        0xE0000000,
+        0xFFFFFFFF,
+        0x0000000100000000ull,
+    },
     //          - physical raw
-    0x100000000, 0x11FFFFFFF, 0x0000000100000000ull,
+    {
+        0x100000000,
+        0x11FFFFFFF,
+        0x0000000100000000ull,
+    },
 };
 int Memory::MapViews(uint8_t* mapping_base) {
   assert_true(xe::countof(map_info) == xe::countof(views_.all_views));
   for (size_t n = 0; n < xe::countof(map_info); n++) {
-#if XE_PLATFORM_WIN32
-    DWORD target_address_low = static_cast<DWORD>(map_info[n].target_address);
-    DWORD target_address_high =
-        static_cast<DWORD>(map_info[n].target_address >> 32);
-    views_.all_views[n] = reinterpret_cast<uint8_t*>(MapViewOfFileEx(
-        mapping_, FILE_MAP_ALL_ACCESS, target_address_high, target_address_low,
+    views_.all_views[n] = reinterpret_cast<uint8_t*>(xe::memory::MapFileView(
+        mapping_, mapping_base + map_info[n].virtual_address_start,
         map_info[n].virtual_address_end - map_info[n].virtual_address_start + 1,
-        mapping_base + map_info[n].virtual_address_start));
-#else
-    views_.all_views[n] = reinterpret_cast<uint8_t*>(mmap(
-        map_info[n].virtual_address_start + mapping_base,
-        map_info[n].virtual_address_end - map_info[n].virtual_address_start + 1,
-        PROT_NONE, MAP_SHARED | MAP_FIXED, mapping_,
-        map_info[n].target_address));
-#endif  // XE_PLATFORM_WIN32
+        xe::memory::PageAccess::kReadWrite, map_info[n].target_address));
     if (!views_.all_views[n]) {
       // Failed, so bail and try again.
       UnmapViews();
@@ -263,15 +283,19 @@ int Memory::MapViews(uint8_t* mapping_base) {
 void Memory::UnmapViews() {
   for (size_t n = 0; n < xe::countof(views_.all_views); n++) {
     if (views_.all_views[n]) {
-#if XE_PLATFORM_WIN32
-      UnmapViewOfFile(views_.all_views[n]);
-#else
       size_t length = map_info[n].virtual_address_end -
                       map_info[n].virtual_address_start + 1;
-      munmap(views_.all_views[n], length);
-#endif  // XE_PLATFORM_WIN32
+      xe::memory::UnmapFileView(mapping_, views_.all_views[n], length);
     }
   }
+}
+
+void Memory::Reset() {
+  heaps_.v00000000.Reset();
+  heaps_.v40000000.Reset();
+  heaps_.v80000000.Reset();
+  heaps_.v90000000.Reset();
+  heaps_.physical.Reset();
 }
 
 BaseHeap* Memory::LookupHeap(uint32_t address) {
@@ -315,6 +339,8 @@ BaseHeap* Memory::LookupHeapByType(bool physical, uint32_t page_size) {
   }
 }
 
+VirtualHeap* Memory::GetPhysicalHeap() { return &heaps_.physical; }
+
 void Memory::Zero(uint32_t address, uint32_t size) {
   std::memset(TranslateVirtual(address), 0, size);
 }
@@ -357,9 +383,9 @@ bool Memory::AddVirtualMappedRange(uint32_t virtual_address, uint32_t mask,
                                    uint32_t size, void* context,
                                    cpu::MMIOReadCallback read_callback,
                                    cpu::MMIOWriteCallback write_callback) {
-  DWORD protect = PAGE_NOACCESS;
-  if (!VirtualAlloc(TranslateVirtual(virtual_address), size, MEM_COMMIT,
-                    protect)) {
+  if (!xe::memory::AllocFixed(TranslateVirtual(virtual_address), size,
+                              xe::memory::AllocationType::kCommit,
+                              xe::memory::PageAccess::kNoAccess)) {
     XELOGE("Unable to map range; commit/protect failed");
     return false;
   }
@@ -371,17 +397,19 @@ cpu::MMIORange* Memory::LookupVirtualMappedRange(uint32_t virtual_address) {
   return mmio_handler_->LookupRange(virtual_address);
 }
 
-uintptr_t Memory::AddPhysicalWriteWatch(uint32_t physical_address,
-                                        uint32_t length,
-                                        cpu::WriteWatchCallback callback,
-                                        void* callback_context,
-                                        void* callback_data) {
-  return mmio_handler_->AddPhysicalWriteWatch(
-      physical_address, length, callback, callback_context, callback_data);
+uintptr_t Memory::AddPhysicalAccessWatch(uint32_t physical_address,
+                                         uint32_t length,
+                                         cpu::MMIOHandler::WatchType type,
+                                         cpu::AccessWatchCallback callback,
+                                         void* callback_context,
+                                         void* callback_data) {
+  return mmio_handler_->AddPhysicalAccessWatch(physical_address, length, type,
+                                               callback, callback_context,
+                                               callback_data);
 }
 
-void Memory::CancelWriteWatch(uintptr_t watch_handle) {
-  mmio_handler_->CancelWriteWatch(watch_handle);
+void Memory::CancelAccessWatch(uintptr_t watch_handle) {
+  mmio_handler_->CancelAccessWatch(watch_handle);
 }
 
 uint32_t Memory::SystemHeapAlloc(uint32_t size, uint32_t alignment,
@@ -436,39 +464,54 @@ void Memory::DumpMap() {
   XELOGE("");
 }
 
-DWORD ToWin32ProtectFlags(uint32_t protect) {
-  DWORD result = 0;
-  if ((protect & kMemoryProtectRead) && !(protect & kMemoryProtectWrite)) {
-    result |= PAGE_READONLY;
-  } else if ((protect & kMemoryProtectRead) &&
-             (protect & kMemoryProtectWrite)) {
-    result |= PAGE_READWRITE;
-  } else {
-    result |= PAGE_NOACCESS;
-  }
-  // if (protect & kMemoryProtectNoCache) {
-  //  result |= PAGE_NOCACHE;
-  //}
-  // if (protect & kMemoryProtectWriteCombine) {
-  //  result |= PAGE_WRITECOMBINE;
-  //}
-  return result;
+bool Memory::Save(ByteStream* stream) {
+  XELOGD("Serializing memory...");
+  heaps_.v00000000.Save(stream);
+  heaps_.v40000000.Save(stream);
+  heaps_.v80000000.Save(stream);
+  heaps_.v90000000.Save(stream);
+  heaps_.physical.Save(stream);
+
+  return true;
 }
 
-uint32_t FromWin32ProtectFlags(DWORD protect) {
-  uint32_t result = 0;
-  if (protect & PAGE_READONLY) {
-    result |= kMemoryProtectRead;
-  } else if (protect & PAGE_READWRITE) {
-    result |= kMemoryProtectRead | kMemoryProtectWrite;
+bool Memory::Restore(ByteStream* stream) {
+  XELOGD("Restoring memory...");
+  heaps_.v00000000.Restore(stream);
+  heaps_.v40000000.Restore(stream);
+  heaps_.v80000000.Restore(stream);
+  heaps_.v90000000.Restore(stream);
+  heaps_.physical.Restore(stream);
+
+  return true;
+}
+
+xe::memory::PageAccess ToPageAccess(uint32_t protect) {
+  if ((protect & kMemoryProtectRead) && !(protect & kMemoryProtectWrite)) {
+    return xe::memory::PageAccess::kReadOnly;
+  } else if ((protect & kMemoryProtectRead) &&
+             (protect & kMemoryProtectWrite)) {
+    return xe::memory::PageAccess::kReadWrite;
+  } else {
+    return xe::memory::PageAccess::kNoAccess;
   }
-  if (protect & PAGE_NOCACHE) {
-    result |= kMemoryProtectNoCache;
+}
+
+uint32_t FromPageAccess(xe::memory::PageAccess protect) {
+  switch (protect) {
+    case memory::PageAccess::kNoAccess:
+      return kMemoryProtectNoAccess;
+    case memory::PageAccess::kReadOnly:
+      return kMemoryProtectRead;
+    case memory::PageAccess::kReadWrite:
+      return kMemoryProtectRead | kMemoryProtectWrite;
+    case memory::PageAccess::kExecuteReadWrite:
+      // Guest memory cannot be executable - this should never happen :)
+      assert_always();
+      return kMemoryProtectRead | kMemoryProtectWrite;
   }
-  if (protect & PAGE_WRITECOMBINE) {
-    result |= kMemoryProtectWriteCombine;
-  }
-  return result;
+
+  return kMemoryProtectNoAccess;
 }
 
 BaseHeap::BaseHeap()
@@ -491,15 +534,15 @@ void BaseHeap::Dispose() {
        ++page_number) {
     auto& page_entry = page_table_[page_number];
     if (page_entry.state) {
-      VirtualFree(membase_ + heap_base_ + page_number * page_size_, 0,
-                  MEM_RELEASE);
+      xe::memory::DeallocFixed(membase_ + heap_base_ + page_number * page_size_,
+                               0, xe::memory::DeallocationType::kRelease);
       page_number += page_entry.region_page_count;
     }
   }
 }
 
 void BaseHeap::DumpMap() {
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
   XELOGE("------------------------------------------------------------------");
   XELOGE("Heap: %.8X-%.8X", heap_base_, heap_base_ + heap_size_);
   XELOGE("------------------------------------------------------------------");
@@ -546,6 +589,112 @@ void BaseHeap::DumpMap() {
   }
 }
 
+uint32_t BaseHeap::GetTotalPageCount() { return uint32_t(page_table_.size()); }
+
+uint32_t BaseHeap::GetUnreservedPageCount() {
+  auto global_lock = global_critical_region_.Acquire();
+  uint32_t count = 0;
+  bool is_empty_span = false;
+  uint32_t empty_span_start = 0;
+  uint32_t size = uint32_t(page_table_.size());
+  for (uint32_t i = 0; i < size; ++i) {
+    auto& page = page_table_[i];
+    if (!page.state) {
+      if (!is_empty_span) {
+        is_empty_span = true;
+        empty_span_start = i;
+      }
+      continue;
+    }
+    if (is_empty_span) {
+      is_empty_span = false;
+      count += i - empty_span_start;
+    }
+    i += page.region_page_count - 1;
+  }
+  if (is_empty_span) {
+    count += size - empty_span_start;
+  }
+  return count;
+}
+
+bool BaseHeap::Save(ByteStream* stream) {
+  XELOGD("Heap %.8X-%.8X", heap_base_, heap_base_ + heap_size_);
+
+  for (size_t i = 0; i < page_table_.size(); i++) {
+    auto& page = page_table_[i];
+    stream->Write(page.qword);
+    if (!page.state) {
+      // Unallocated.
+      continue;
+    }
+
+    // TODO(DrChat): write compressed with snappy.
+    if (page.state & kMemoryAllocationCommit) {
+      void* addr = membase_ + heap_base_ + i * page_size_;
+
+      memory::PageAccess old_access;
+      memory::Protect(addr, page_size_, memory::PageAccess::kReadWrite,
+                      &old_access);
+
+      stream->Write(addr, page_size_);
+
+      memory::Protect(addr, page_size_, old_access, nullptr);
+    }
+  }
+
+  return true;
+}
+
+bool BaseHeap::Restore(ByteStream* stream) {
+  XELOGD("Heap %.8X-%.8X", heap_base_, heap_base_ + heap_size_);
+
+  for (size_t i = 0; i < page_table_.size(); i++) {
+    auto& page = page_table_[i];
+    page.qword = stream->Read<uint64_t>();
+    if (!page.state) {
+      // Unallocated.
+      continue;
+    }
+
+    memory::PageAccess page_access = memory::PageAccess::kNoAccess;
+    if ((page.current_protect & kMemoryProtectRead) &&
+        (page.current_protect & kMemoryProtectWrite)) {
+      page_access = memory::PageAccess::kReadWrite;
+    } else if (page.current_protect & kMemoryProtectRead) {
+      page_access = memory::PageAccess::kReadOnly;
+    }
+
+    // Commit the memory if it isn't already. We do not need to reserve any
+    // memory, as the mapping has already taken care of that.
+    if (page.state & kMemoryAllocationCommit) {
+      xe::memory::AllocFixed(membase_ + heap_base_ + i * page_size_, page_size_,
+                             memory::AllocationType::kCommit,
+                             memory::PageAccess::kReadWrite);
+    }
+
+    // Now read into memory. We'll set R/W protection first, then set the
+    // protection back to its previous state.
+    // TODO(DrChat): read compressed with snappy.
+    if (page.state & kMemoryAllocationCommit) {
+      void* addr = membase_ + heap_base_ + i * page_size_;
+      xe::memory::Protect(addr, page_size_, memory::PageAccess::kReadWrite,
+                          nullptr);
+
+      stream->Read(addr, page_size_);
+
+      xe::memory::Protect(addr, page_size_, page_access, nullptr);
+    }
+  }
+
+  return true;
+}
+
+void BaseHeap::Reset() {
+  // TODO(DrChat): protect pages.
+  std::memset(page_table_.data(), 0, sizeof(PageEntry) * page_table_.size());
+}
+
 bool BaseHeap::Alloc(uint32_t size, uint32_t alignment,
                      uint32_t allocation_type, uint32_t protect, bool top_down,
                      uint32_t* out_address) {
@@ -573,7 +722,7 @@ bool BaseHeap::AllocFixed(uint32_t base_address, uint32_t size,
     return false;
   }
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // - If we are reserving the entire range requested must not be already
   //   reserved.
@@ -603,14 +752,12 @@ bool BaseHeap::AllocFixed(uint32_t base_address, uint32_t size,
   if (allocation_type == kMemoryAllocationReserve) {
     // Reserve is not needed, as we are mapped already.
   } else {
-    DWORD flAllocationType = 0;
-    if (allocation_type & kMemoryAllocationCommit) {
-      flAllocationType |= MEM_COMMIT;
-    }
-    LPVOID result =
-        VirtualAlloc(membase_ + heap_base_ + start_page_number * page_size_,
-                     page_count * page_size_, flAllocationType,
-                     ToWin32ProtectFlags(protect));
+    auto alloc_type = (allocation_type & kMemoryAllocationCommit)
+                          ? xe::memory::AllocationType::kCommit
+                          : xe::memory::AllocationType::kReserve;
+    void* result = xe::memory::AllocFixed(
+        membase_ + heap_base_ + start_page_number * page_size_,
+        page_count * page_size_, alloc_type, ToPageAccess(protect));
     if (!result) {
       XELOGE("BaseHeap::AllocFixed failed to alloc range from host");
       return false;
@@ -655,7 +802,12 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
   high_page_number =
       std::min(uint32_t(page_table_.size()) - 1, high_page_number);
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  if (page_count > (high_page_number - low_page_number)) {
+    XELOGE("BaseHeap::Alloc page count too big for requested range");
+    return false;
+  }
+
+  auto global_lock = global_critical_region_.Acquire();
 
   // Find a free page range.
   // The base page must match the requested alignment, so we first scan for
@@ -666,10 +818,10 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
   uint32_t page_scan_stride = alignment / page_size_;
   high_page_number = high_page_number - (high_page_number % page_scan_stride);
   if (top_down) {
-    for (int64_t base_page_number = high_page_number - page_count;
+    for (int64_t base_page_number =
+             high_page_number - xe::round_up(page_count, page_scan_stride);
          base_page_number >= low_page_number;
          base_page_number -= page_scan_stride) {
-      bool is_free = page_table_[base_page_number].state == 0;
       if (page_table_[base_page_number].state != 0) {
         // Base page not free, skip to next usable page.
         continue;
@@ -686,9 +838,15 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
           // At least one page in the range is used, skip to next.
           // We know we'll be starting at least before this page.
           any_taken = true;
-          base_page_number = page_number - page_count;
-          base_page_number -= base_page_number % page_scan_stride;
-          base_page_number += page_scan_stride;  // cancel out loop logic
+          if (page_count > page_number) {
+            // Not enough space left to fit entire page range. Breaks outer
+            // loop.
+            base_page_number = -1;
+          } else {
+            base_page_number = page_number - page_count;
+            base_page_number -= base_page_number % page_scan_stride;
+            base_page_number += page_scan_stride;  // cancel out loop logic
+          }
           break;
         }
       }
@@ -703,7 +861,6 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
     for (uint32_t base_page_number = low_page_number;
          base_page_number <= high_page_number - page_count;
          base_page_number += page_scan_stride) {
-      bool is_free = page_table_[base_page_number].state == 0;
       if (page_table_[base_page_number].state != 0) {
         // Base page not free, skip to next usable page.
         continue;
@@ -743,20 +900,18 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
   if (allocation_type == kMemoryAllocationReserve) {
     // Reserve is not needed, as we are mapped already.
   } else {
-    DWORD flAllocationType = 0;
-    if (allocation_type & kMemoryAllocationCommit) {
-      flAllocationType |= MEM_COMMIT;
-    }
-    LPVOID result =
-        VirtualAlloc(membase_ + heap_base_ + start_page_number * page_size_,
-                     page_count * page_size_, flAllocationType,
-                     ToWin32ProtectFlags(protect));
+    auto alloc_type = (allocation_type & kMemoryAllocationCommit)
+                          ? xe::memory::AllocationType::kCommit
+                          : xe::memory::AllocationType::kReserve;
+    void* result = xe::memory::AllocFixed(
+        membase_ + heap_base_ + start_page_number * page_size_,
+        page_count * page_size_, alloc_type, ToPageAccess(protect));
     if (!result) {
       XELOGE("BaseHeap::Alloc failed to alloc range from host");
       return false;
     }
 
-    if (FLAGS_scribble_heap && protect & kMemoryProtectWrite) {
+    if (FLAGS_scribble_heap && (protect & kMemoryProtectWrite)) {
       std::memset(result, 0xCD, page_count * page_size_);
     }
   }
@@ -772,7 +927,7 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
     page_entry.state = kMemoryAllocationReserve | allocation_type;
   }
 
-  *out_address = heap_base_ + start_page_number* page_size_;
+  *out_address = heap_base_ + (start_page_number * page_size_);
   return true;
 }
 
@@ -784,7 +939,7 @@ bool BaseHeap::Decommit(uint32_t address, uint32_t size) {
       std::min(uint32_t(page_table_.size()) - 1, start_page_number);
   end_page_number = std::min(uint32_t(page_table_.size()) - 1, end_page_number);
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // Release from host.
   // TODO(benvanik): find a way to actually decommit memory;
@@ -808,18 +963,23 @@ bool BaseHeap::Decommit(uint32_t address, uint32_t size) {
 }
 
 bool BaseHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // Given address must be a region base address.
   uint32_t base_page_number = (base_address - heap_base_) / page_size_;
   auto base_page_entry = page_table_[base_page_number];
   if (base_page_entry.base_address != base_page_number) {
     XELOGE("BaseHeap::Release failed because address is not a region start");
-    // return false;
+    return false;
+  }
+
+  if (heap_base_ == 0x00000000 && base_page_number == 0) {
+    XELOGE("BaseHeap::Release: Attempt to free 0!");
+    return false;
   }
 
   if (out_region_size) {
-    *out_region_size = base_page_entry.region_page_count* page_size_;
+    *out_region_size = (base_page_entry.region_page_count * page_size_);
   }
 
   // Release from host not needed as mapping reserves the range for us.
@@ -831,15 +991,21 @@ bool BaseHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
     return false;
   }*/
   // Instead, we just protect it, if we can.
-  if (page_size_ == xe::page_size() ||
-      ((base_page_entry.region_page_count * page_size_) % xe::page_size() ==
-       0) &&
-          ((base_page_number * page_size_) % xe::page_size() == 0)) {
-    DWORD old_protect;
-    if (!VirtualProtect(membase_ + heap_base_ + base_page_number * page_size_,
-                        base_page_entry.region_page_count * page_size_,
-                        PAGE_NOACCESS, &old_protect)) {
-      XELOGW("BaseHeap::Release failed due to host VirtualProtect failure");
+  if (page_size_ == xe::memory::page_size() ||
+      ((base_page_entry.region_page_count * page_size_) %
+               xe::memory::page_size() ==
+           0 &&
+       ((base_page_number * page_size_) % xe::memory::page_size() == 0))) {
+    // TODO(benvanik): figure out why games are using memory after releasing it.
+    // It's possible this is some virtual/physical stuff where the GPU still can
+    // access it.
+    if (FLAGS_protect_on_release) {
+      if (!xe::memory::Protect(
+              membase_ + heap_base_ + base_page_number * page_size_,
+              base_page_entry.region_page_count * page_size_,
+              xe::memory::PageAccess::kNoAccess, nullptr)) {
+        XELOGW("BaseHeap::Release failed due to host VirtualProtect failure");
+      }
     }
   }
 
@@ -855,7 +1021,8 @@ bool BaseHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
   return true;
 }
 
-bool BaseHeap::Protect(uint32_t address, uint32_t size, uint32_t protect) {
+bool BaseHeap::Protect(uint32_t address, uint32_t size, uint32_t protect,
+                       uint32_t* old_protect) {
   uint32_t page_count = xe::round_up(size, page_size_) / page_size_;
   uint32_t start_page_number = (address - heap_base_) / page_size_;
   uint32_t end_page_number = start_page_number + page_count - 1;
@@ -863,7 +1030,7 @@ bool BaseHeap::Protect(uint32_t address, uint32_t size, uint32_t protect) {
       std::min(uint32_t(page_table_.size()) - 1, start_page_number);
   end_page_number = std::min(uint32_t(page_table_.size()) - 1, end_page_number);
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // Ensure all pages are in the same reserved region and all are committed.
   uint32_t first_base_address = UINT_MAX;
@@ -884,18 +1051,24 @@ bool BaseHeap::Protect(uint32_t address, uint32_t size, uint32_t protect) {
 
   // Attempt host change (hopefully won't fail).
   // We can only do this if our size matches system page granularity.
-  if (page_size_ == xe::page_size() ||
-      ((page_count * page_size_) % xe::page_size() == 0) &&
-          ((start_page_number * page_size_) % xe::page_size() == 0)) {
-    DWORD new_protect = ToWin32ProtectFlags(protect);
-    DWORD old_protect;
-    if (!VirtualProtect(membase_ + heap_base_ + start_page_number * page_size_,
-                        page_count * page_size_, new_protect, &old_protect)) {
+  if (page_size_ == xe::memory::page_size() ||
+      (((page_count * page_size_) % xe::memory::page_size() == 0) &&
+       ((start_page_number * page_size_) % xe::memory::page_size() == 0))) {
+    memory::PageAccess old_protect_access;
+    if (!xe::memory::Protect(
+            membase_ + heap_base_ + start_page_number * page_size_,
+            page_count * page_size_, ToPageAccess(protect),
+            old_protect ? &old_protect_access : nullptr)) {
       XELOGE("BaseHeap::Protect failed due to host VirtualProtect failure");
       return false;
     }
+
+    if (old_protect) {
+      *old_protect = FromPageAccess(old_protect_access);
+    }
   } else {
-    XELOGW("BaseHeap::Protect: ignoring request as not 64k page aligned");
+    XELOGW("BaseHeap::Protect: ignoring request as not 4k page aligned");
+    return false;
   }
 
   // Perform table change.
@@ -916,7 +1089,7 @@ bool BaseHeap::QueryRegionInfo(uint32_t base_address,
     return false;
   }
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   auto start_page_entry = page_table_[start_page_number];
   out_info->base_address = base_address;
@@ -925,16 +1098,19 @@ bool BaseHeap::QueryRegionInfo(uint32_t base_address,
   out_info->region_size = 0;
   out_info->state = 0;
   out_info->protect = 0;
-  out_info->type = 0;
   if (start_page_entry.state) {
     // Committed/reserved region.
     out_info->allocation_base = start_page_entry.base_address * page_size_;
     out_info->allocation_protect = start_page_entry.allocation_protect;
+    out_info->allocation_size = start_page_entry.region_page_count * page_size_;
     out_info->state = start_page_entry.state;
     out_info->protect = start_page_entry.current_protect;
-    out_info->type = 0x20000;
+
+    // Scan forward and report the size of the region matching the initial
+    // base address's attributes.
     for (uint32_t page_number = start_page_number;
-         page_number < start_page_number + start_page_entry.region_page_count;
+         page_number <
+         start_page_entry.base_address + start_page_entry.region_page_count;
          ++page_number) {
       auto page_entry = page_table_[page_number];
       if (page_entry.base_address != start_page_entry.base_address ||
@@ -967,9 +1143,23 @@ bool BaseHeap::QuerySize(uint32_t address, uint32_t* out_size) {
     *out_size = 0;
     return false;
   }
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
   auto page_entry = page_table_[page_number];
-  *out_size = page_entry.region_page_count* page_size_;
+  *out_size = (page_entry.region_page_count * page_size_);
+  return true;
+}
+
+bool BaseHeap::QueryBaseAndSize(uint32_t* in_out_address, uint32_t* out_size) {
+  uint32_t page_number = (*in_out_address - heap_base_) / page_size_;
+  if (page_number > page_table_.size()) {
+    XELOGE("BaseHeap::QuerySize base page out of range");
+    *out_size = 0;
+    return false;
+  }
+  auto global_lock = global_critical_region_.Acquire();
+  auto page_entry = page_table_[page_number];
+  *in_out_address = (page_entry.base_address * page_size_);
+  *out_size = (page_entry.region_page_count * page_size_);
   return true;
 }
 
@@ -980,7 +1170,7 @@ bool BaseHeap::QueryProtect(uint32_t address, uint32_t* out_protect) {
     *out_protect = 0;
     return false;
   }
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
   auto page_entry = page_table_[page_number];
   *out_protect = page_entry.current_protect;
   return true;
@@ -1028,7 +1218,7 @@ bool PhysicalHeap::Alloc(uint32_t size, uint32_t alignment,
   size = xe::round_up(size, page_size_);
   alignment = xe::round_up(alignment, page_size_);
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // Allocate from parent heap (gets our physical address in 0-512mb).
   uint32_t parent_low_address = GetPhysicalAddress(heap_base_);
@@ -1066,7 +1256,7 @@ bool PhysicalHeap::AllocFixed(uint32_t base_address, uint32_t size,
   size = xe::round_up(size, page_size_);
   alignment = xe::round_up(alignment, page_size_);
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // Allocate from parent heap (gets our physical address in 0-512mb).
   // NOTE: this can potentially overwrite heap contents if there are already
@@ -1107,7 +1297,7 @@ bool PhysicalHeap::AllocRange(uint32_t low_address, uint32_t high_address,
   size = xe::round_up(size, page_size_);
   alignment = xe::round_up(alignment, page_size_);
 
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
 
   // Allocate from parent heap (gets our physical address in 0-512mb).
   low_address = std::max(heap_base_, low_address);
@@ -1141,7 +1331,7 @@ bool PhysicalHeap::AllocRange(uint32_t low_address, uint32_t high_address,
 }
 
 bool PhysicalHeap::Decommit(uint32_t address, uint32_t size) {
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
   uint32_t parent_address = GetPhysicalAddress(address);
   if (!parent_heap_->Decommit(parent_address, size)) {
     XELOGE("PhysicalHeap::Decommit failed due to parent heap failure");
@@ -1151,23 +1341,33 @@ bool PhysicalHeap::Decommit(uint32_t address, uint32_t size) {
 }
 
 bool PhysicalHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+  auto global_lock = global_critical_region_.Acquire();
   uint32_t parent_base_address = GetPhysicalAddress(base_address);
+  uint32_t region_size = 0;
+  if (QuerySize(base_address, &region_size)) {
+    cpu::MMIOHandler::global_handler()->InvalidateRange(parent_base_address,
+                                                        region_size);
+  }
+
   if (!parent_heap_->Release(parent_base_address, out_region_size)) {
     XELOGE("PhysicalHeap::Release failed due to parent heap failure");
     return false;
   }
+
   return BaseHeap::Release(base_address, out_region_size);
 }
 
-bool PhysicalHeap::Protect(uint32_t address, uint32_t size, uint32_t protect) {
-  std::lock_guard<xe::recursive_mutex> lock(heap_mutex_);
+bool PhysicalHeap::Protect(uint32_t address, uint32_t size, uint32_t protect,
+                           uint32_t* old_protect) {
+  auto global_lock = global_critical_region_.Acquire();
   uint32_t parent_address = GetPhysicalAddress(address);
-  bool parent_result = parent_heap_->Protect(parent_address, size, protect);
-  if (!parent_result) {
+  cpu::MMIOHandler::global_handler()->InvalidateRange(parent_address, size);
+
+  if (!parent_heap_->Protect(parent_address, size, protect, old_protect)) {
     XELOGE("PhysicalHeap::Protect failed due to parent heap failure");
     return false;
   }
+
   return BaseHeap::Protect(address, size, protect);
 }
 

@@ -7,13 +7,15 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_BACKEND_X64_X64_ASSEMBLER_H_
-#define XENIA_BACKEND_X64_X64_ASSEMBLER_H_
+#ifndef XENIA_CPU_BACKEND_X64_X64_ASSEMBLER_H_
+#define XENIA_CPU_BACKEND_X64_X64_ASSEMBLER_H_
 
 #include <memory>
+#include <vector>
 
 #include "xenia/base/string_buffer.h"
 #include "xenia/cpu/backend/assembler.h"
+#include "xenia/cpu/function.h"
 
 namespace xe {
 namespace cpu {
@@ -26,21 +28,21 @@ class XbyakAllocator;
 
 class X64Assembler : public Assembler {
  public:
-  X64Assembler(X64Backend* backend);
+  explicit X64Assembler(X64Backend* backend);
   ~X64Assembler() override;
 
   bool Initialize() override;
 
   void Reset() override;
 
-  bool Assemble(FunctionInfo* symbol_info, hir::HIRBuilder* builder,
+  bool Assemble(GuestFunction* function, hir::HIRBuilder* builder,
                 uint32_t debug_info_flags,
-                std::unique_ptr<DebugInfo> debug_info,
-                Function** out_function) override;
+                std::unique_ptr<FunctionDebugInfo> debug_info) override;
 
  private:
-  void DumpMachineCode(DebugInfo* debug_info, void* machine_code,
-                       size_t code_size, StringBuffer* str);
+  void DumpMachineCode(void* machine_code, size_t code_size,
+                       const std::vector<SourceMapEntry>& source_map,
+                       StringBuffer* str);
 
  private:
   X64Backend* x64_backend_;
@@ -56,4 +58,4 @@ class X64Assembler : public Assembler {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_BACKEND_X64_X64_ASSEMBLER_H_
+#endif  // XENIA_CPU_BACKEND_X64_X64_ASSEMBLER_H_

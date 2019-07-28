@@ -11,10 +11,10 @@
 
 #include "xenia/base/assert.h"
 #include "xenia/base/platform.h"
+#include "xenia/base/profiling.h"
 #include "xenia/cpu/backend/backend.h"
 #include "xenia/cpu/compiler/compiler.h"
 #include "xenia/cpu/processor.h"
-#include "xenia/profiling.h"
 
 #if XE_COMPILER_MSVC
 #pragma warning(push)
@@ -24,6 +24,7 @@
 #pragma warning(pop)
 #else
 #include <llvm/ADT/BitVector.h>
+#include <cmath>
 #endif  // XE_COMPILER_MSVC
 
 namespace xe {
@@ -55,7 +56,7 @@ bool DataFlowAnalysisPass::Run(HIRBuilder* builder) {
 uint32_t DataFlowAnalysisPass::LinearizeBlocks(HIRBuilder* builder) {
   // TODO(benvanik): actually do this - we cheat now knowing that they are in
   //     sequential order.
-  uint32_t block_ordinal = 0;
+  uint16_t block_ordinal = 0;
   auto block = builder->first_block();
   while (block) {
     block->ordinal = block_ordinal++;
@@ -71,8 +72,8 @@ void DataFlowAnalysisPass::AnalyzeFlow(HIRBuilder* builder,
 
   // Stash for value map. We may want to maintain this during building.
   auto arena = builder->arena();
-  Value** value_map =
-      (Value**)arena->Alloc(sizeof(Value*) * max_value_estimate);
+  auto value_map = reinterpret_cast<Value**>(
+      arena->Alloc(sizeof(Value*) * max_value_estimate));
 
   // Allocate incoming bitvectors for use by blocks. We don't need outgoing
   // because they are only used during the block iteration.

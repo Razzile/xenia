@@ -7,16 +7,12 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_BACKEND_X64_X64_SEQUENCES_H_
-#define XENIA_BACKEND_X64_X64_SEQUENCES_H_
+#ifndef XENIA_CPU_BACKEND_X64_X64_SEQUENCES_H_
+#define XENIA_CPU_BACKEND_X64_X64_SEQUENCES_H_
 
-namespace xe {
-namespace cpu {
-namespace hir {
-class Instr;
-}  // namespace hir
-}  // namespace cpu
-}  // namespace xe
+#include "xenia/cpu/hir/instr.h"
+
+#include <unordered_map>
 
 namespace xe {
 namespace cpu {
@@ -25,8 +21,26 @@ namespace x64 {
 
 class X64Emitter;
 
-void RegisterSequences();
-bool SelectSequence(X64Emitter& e, const hir::Instr* i,
+typedef bool (*SequenceSelectFn)(X64Emitter&, const hir::Instr*);
+extern std::unordered_map<uint32_t, SequenceSelectFn> sequence_table;
+
+template <typename T>
+bool Register() {
+  sequence_table.insert({T::head_key(), T::Select});
+  return true;
+}
+
+template <typename T, typename Tn, typename... Ts>
+static bool Register() {
+  bool b = true;
+  b = b && Register<T>();          // Call the above function
+  b = b && Register<Tn, Ts...>();  // Call ourself again (recursively)
+  return b;
+}
+#define EMITTER_OPCODE_TABLE(name, ...) \
+  const auto X64_INSTR_##name = Register<__VA_ARGS__>();
+
+bool SelectSequence(X64Emitter* e, const hir::Instr* i,
                     const hir::Instr** new_tail);
 
 }  // namespace x64
@@ -34,4 +48,4 @@ bool SelectSequence(X64Emitter& e, const hir::Instr* i,
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_BACKEND_X64_X64_SEQUENCES_H_
+#endif  // XENIA_CPU_BACKEND_X64_X64_SEQUENCES_H_

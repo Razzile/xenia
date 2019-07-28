@@ -9,10 +9,10 @@
 
 #include "xenia/cpu/compiler/passes/finalization_pass.h"
 
+#include "xenia/base/profiling.h"
 #include "xenia/cpu/backend/backend.h"
 #include "xenia/cpu/compiler/compiler.h"
 #include "xenia/cpu/processor.h"
-#include "xenia/profiling.h"
 
 namespace xe {
 namespace cpu {
@@ -34,7 +34,7 @@ bool FinalizationPass::Run(HIRBuilder* builder) {
 
   auto arena = builder->arena();
 
-  uint32_t block_ordinal = 0;
+  uint16_t block_ordinal = 0;
   auto block = builder->first_block();
   while (block) {
     block->ordinal = block_ordinal++;
@@ -44,7 +44,7 @@ bool FinalizationPass::Run(HIRBuilder* builder) {
     while (label) {
       if (!label->name) {
         const size_t label_len = 6 + 4 + 1;
-        char* name = (char*)arena->Alloc(label_len);
+        char* name = reinterpret_cast<char*>(arena->Alloc(label_len));
         snprintf(name, label_len, "_label%d", label->id);
         label->name = name;
       }

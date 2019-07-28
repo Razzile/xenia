@@ -12,11 +12,27 @@
 namespace xe {
 namespace ui {
 
-MenuItem::MenuItem(Type type) : type_(type), parent_item_(nullptr) {}
+std::unique_ptr<MenuItem> MenuItem::Create(Type type) {
+  return MenuItem::Create(type, L"", L"", nullptr);
+}
+
+std::unique_ptr<MenuItem> MenuItem::Create(Type type,
+                                           const std::wstring& text) {
+  return MenuItem::Create(type, text, L"", nullptr);
+}
+
+std::unique_ptr<MenuItem> MenuItem::Create(Type type, const std::wstring& text,
+                                           std::function<void()> callback) {
+  return MenuItem::Create(type, text, L"", std::move(callback));
+}
 
 MenuItem::MenuItem(Type type, const std::wstring& text,
-                   const std::wstring& hotkey)
-    : type_(type), parent_item_(nullptr), text_(text), hotkey_(hotkey) {}
+                   const std::wstring& hotkey, std::function<void()> callback)
+    : type_(type),
+      parent_item_(nullptr),
+      text_(text),
+      hotkey_(hotkey),
+      callback_(std::move(callback)) {}
 
 MenuItem::~MenuItem() = default;
 
@@ -36,7 +52,7 @@ void MenuItem::AddChild(MenuItemPtr child_item) {
 }
 
 void MenuItem::RemoveChild(MenuItem* child_item) {
-  for (auto& it = children_.begin(); it != children_.end(); ++it) {
+  for (auto it = children_.begin(); it != children_.end(); ++it) {
     if (it->get() == child_item) {
       children_.erase(it);
       OnChildRemoved(child_item);
@@ -45,7 +61,13 @@ void MenuItem::RemoveChild(MenuItem* child_item) {
   }
 }
 
-void MenuItem::OnSelected(UIEvent& e) { on_selected(e); }
+MenuItem* MenuItem::child(size_t index) { return children_[index].get(); }
+
+void MenuItem::OnSelected(UIEvent* e) {
+  if (callback_) {
+    callback_();
+  }
+}
 
 }  // namespace ui
 }  // namespace xe

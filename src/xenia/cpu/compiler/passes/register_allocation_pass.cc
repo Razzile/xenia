@@ -15,7 +15,7 @@
 #include "xenia/base/assert.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/math.h"
-#include "xenia/profiling.h"
+#include "xenia/base/profiling.h"
 
 namespace xe {
 namespace cpu {
@@ -77,7 +77,7 @@ bool RegisterAllocationPass::Run(HIRBuilder* builder) {
   // Really, it'd just be nice to have someone who knew what they
   // were doing lower SSA and do this right.
 
-  uint32_t block_ordinal = 0;
+  uint16_t block_ordinal = 0;
   uint32_t instr_ordinal = 0;
   auto block = builder->first_block();
   while (block) {
@@ -180,7 +180,8 @@ void RegisterAllocationPass::DumpUsage(const char* name) {
     auto usage_set = usage_sets_.all_sets[i];
     if (usage_set) {
       fprintf(stdout, "set %s:\n", usage_set->set->name);
-      fprintf(stdout, "  avail: %s\n", usage_set->availability.to_string().c_str());
+      fprintf(stdout, "  avail: %s\n",
+              usage_set->availability.to_string().c_str());
       fprintf(stdout, "  upcoming uses:\n");
       for (auto it = usage_set->upcoming_uses.begin();
            it != usage_set->upcoming_uses.end(); ++it) {
@@ -212,27 +213,27 @@ void RegisterAllocationPass::AdvanceUses(Instr* instr) {
       break;
     }
     auto& upcoming_uses = usage_set->upcoming_uses;
-    for (int i = 0; i < upcoming_uses.size();) {
-      auto& upcoming_use = upcoming_uses.at(i);
+    for (size_t j = 0; j < upcoming_uses.size();) {
+      auto& upcoming_use = upcoming_uses.at(j);
       if (!upcoming_use.use) {
         // No uses at all - we can remove right away.
         // This comes up from instructions where the dest is never used,
         // like the ATOMIC ops.
         MarkRegAvailable(upcoming_use.value->reg);
-        upcoming_uses.erase(upcoming_uses.begin() + i);
+        upcoming_uses.erase(upcoming_uses.begin() + j);
         // i remains the same.
         continue;
       }
       if (upcoming_use.use->instr != instr) {
         // Not yet at this instruction.
-        ++i;
+        ++j;
         continue;
       }
       // The use is from this instruction.
       if (!upcoming_use.use->next) {
         // Last use of the value. We can retire it now.
         MarkRegAvailable(upcoming_use.value->reg);
-        upcoming_uses.erase(upcoming_uses.begin() + i);
+        upcoming_uses.erase(upcoming_uses.begin() + j);
         // i remains the same.
         continue;
       } else {
@@ -245,7 +246,7 @@ void RegisterAllocationPass::AdvanceUses(Instr* instr) {
         }
         // Remove the iterator.
         auto value = upcoming_use.value;
-        upcoming_uses.erase(upcoming_uses.begin() + i);
+        upcoming_uses.erase(upcoming_uses.begin() + j);
         assert_true(next_use->instr->block == instr->block);
         assert_true(value->def->block == instr->block);
         upcoming_uses.emplace_back(value, next_use);
@@ -419,7 +420,7 @@ bool RegisterAllocationPass::SpillOneRegister(HIRBuilder* builder, Block* block,
   auto new_value = builder->LoadLocal(spill_value->local_slot);
   auto spill_load = builder->last_instr();
   spill_load->MoveBefore(next_use->instr);
-// Note: implicit first use added.
+  // Note: implicit first use added.
 
 #if ASSERT_NO_CYCLES
   builder->AssertNoCycles();
@@ -488,7 +489,7 @@ int CompareValueUse(const Value::Use* a, const Value::Use* b) {
 }  // namespace
 void RegisterAllocationPass::SortUsageList(Value* value) {
   // Modified in-place linked list sort from:
-  // http://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.c
+  // https://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.c
   if (!value->use_head) {
     return;
   }

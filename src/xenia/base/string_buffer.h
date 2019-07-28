@@ -12,12 +12,13 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace xe {
 
 class StringBuffer {
  public:
-  StringBuffer(size_t initial_capacity = 0);
+  explicit StringBuffer(size_t initial_capacity = 0);
   ~StringBuffer();
 
   size_t length() const { return buffer_offset_; }
@@ -34,13 +35,14 @@ class StringBuffer {
   const char* GetString() const;
   std::string to_string();
   char* ToString();
+  std::vector<uint8_t> ToBytes() const;
 
  private:
   void Grow(size_t additional_length);
 
-  char* buffer_;
-  size_t buffer_offset_;
-  size_t buffer_capacity_;
+  char* buffer_ = nullptr;
+  size_t buffer_offset_ = 0;
+  size_t buffer_capacity_ = 0;
 };
 
 }  // namespace xe

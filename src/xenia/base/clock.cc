@@ -13,7 +13,6 @@
 #include <climits>
 
 #include "xenia/base/assert.h"
-#include "xenia/base/platform.h"
 
 namespace xe {
 
@@ -34,7 +33,7 @@ thread_local uint64_t last_host_tick_count_ = Clock::QueryHostTickCount();
 
 void RecomputeGuestTickScalar() {
   guest_tick_scalar_ = (guest_tick_frequency_ * guest_time_scalar_) /
-                       double(Clock::host_tick_frequency());
+                       static_cast<double>(Clock::host_tick_frequency());
 }
 
 void UpdateGuestClock() {
@@ -47,31 +46,6 @@ void UpdateGuestClock() {
   guest_tick_count_ += guest_tick_delta;
   guest_time_filetime_ += (guest_tick_delta * 10000000) / guest_tick_frequency_;
 }
-
-uint64_t Clock::host_tick_frequency() {
-  static LARGE_INTEGER frequency = {0};
-  if (!frequency.QuadPart) {
-    QueryPerformanceFrequency(&frequency);
-  }
-  return frequency.QuadPart;
-}
-
-uint64_t Clock::QueryHostTickCount() {
-  LARGE_INTEGER counter;
-  uint64_t time = 0;
-  if (QueryPerformanceCounter(&counter)) {
-    time = counter.QuadPart;
-  }
-  return time;
-}
-
-uint64_t Clock::QueryHostSystemTime() {
-  FILETIME t;
-  GetSystemTimeAsFileTime(&t);
-  return (uint64_t(t.dwHighDateTime) << 32) | t.dwLowDateTime;
-}
-
-uint32_t Clock::QueryHostUptimeMillis() { return ::GetTickCount(); }
 
 double Clock::guest_time_scalar() { return guest_time_scalar_; }
 
@@ -110,6 +84,16 @@ uint32_t Clock::QueryGuestUptimeMillis() {
   return result;
 }
 
+void Clock::SetGuestTickCount(uint64_t tick_count) {
+  last_host_tick_count_ = Clock::QueryHostTickCount();
+  guest_tick_count_ = tick_count;
+}
+
+void Clock::SetGuestSystemTime(uint64_t system_time) {
+  last_host_tick_count_ = Clock::QueryHostTickCount();
+  guest_time_filetime_ = system_time - guest_system_time_base_;
+}
+
 uint32_t Clock::ScaleGuestDurationMillis(uint32_t guest_ms) {
   if (guest_ms == UINT_MAX) {
     return UINT_MAX;
@@ -121,20 +105,25 @@ uint32_t Clock::ScaleGuestDurationMillis(uint32_t guest_ms) {
 }
 
 int64_t Clock::ScaleGuestDurationFileTime(int64_t guest_file_time) {
-  // negative = relative times
-  // positive = absolute times
-  // TODO(benvanik): support absolute times.
-  assert_true(guest_file_time <= 0);
   if (!guest_file_time) {
     return 0;
+  } else if (guest_file_time > 0) {
+    // Absolute time.
+    uint64_t guest_time = Clock::QueryGuestSystemTime();
+    int64_t relative_time = guest_file_time - static_cast<int64_t>(guest_time);
+    int64_t scaled_time =
+        static_cast<int64_t>(relative_time * guest_time_scalar_);
+    return static_cast<int64_t>(guest_time) + scaled_time;
+  } else {
+    // Relative time.
+    uint64_t scaled_file_time =
+        uint64_t(uint64_t(guest_file_time) * guest_time_scalar_);
+    // TODO(benvanik): check for overflow?
+    return scaled_file_time;
   }
-  uint64_t scaled_file_time =
-      uint64_t(uint64_t(guest_file_time) * guest_time_scalar_);
-  // TODO(benvanik): check for overflow?
-  return scaled_file_time;
 }
 
-void Clock::ScaleGuestDurationTimeval(long* tv_sec, long* tv_usec) {
+void Clock::ScaleGuestDurationTimeval(int32_t* tv_sec, int32_t* tv_usec) {
   uint64_t scaled_sec = uint64_t(uint64_t(*tv_sec) * guest_tick_scalar_);
   uint64_t scaled_usec = uint64_t(uint64_t(*tv_usec) * guest_time_scalar_);
   if (scaled_usec > UINT_MAX) {
@@ -142,8 +131,8 @@ void Clock::ScaleGuestDurationTimeval(long* tv_sec, long* tv_usec) {
     scaled_usec -= overflow_sec * 1000000;
     scaled_sec += overflow_sec;
   }
-  *tv_sec = long(scaled_sec);
-  *tv_usec = long(scaled_usec);
+  *tv_sec = int32_t(scaled_sec);
+  *tv_usec = int32_t(scaled_usec);
 }
 
 }  // namespace xe

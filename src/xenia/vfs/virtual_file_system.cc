@@ -12,7 +12,7 @@
 #include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string.h"
-#include "xenia/kernel/objects/xfile.h"
+#include "xenia/kernel/xfile.h"
 
 namespace xe {
 namespace vfs {
@@ -27,30 +27,56 @@ VirtualFileSystem::~VirtualFileSystem() {
 }
 
 bool VirtualFileSystem::RegisterDevice(std::unique_ptr<Device> device) {
-  std::lock_guard<xe::mutex> lock(mutex_);
+  auto global_lock = global_critical_region_.Acquire();
   devices_.emplace_back(std::move(device));
   return true;
 }
 
-bool VirtualFileSystem::RegisterSymbolicLink(std::string path,
-                                             std::string target) {
-  std::lock_guard<xe::mutex> lock(mutex_);
+bool VirtualFileSystem::UnregisterDevice(const std::string& path) {
+  auto global_lock = global_critical_region_.Acquire();
+  for (auto it = devices_.begin(); it != devices_.end(); ++it) {
+    if ((*it)->mount_path() == path) {
+      XELOGD("Unregistered device: %s", (*it)->mount_path().c_str());
+      devices_.erase(it);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool VirtualFileSystem::RegisterSymbolicLink(const std::string& path,
+                                             const std::string& target) {
+  auto global_lock = global_critical_region_.Acquire();
   symlinks_.insert({path, target});
+  XELOGD("Registered symbolic link: %s => %s", path.c_str(), target.c_str());
+
   return true;
 }
 
-bool VirtualFileSystem::UnregisterSymbolicLink(std::string path) {
-  std::lock_guard<xe::mutex> lock(mutex_);
-  auto& it = symlinks_.find(path);
+bool VirtualFileSystem::UnregisterSymbolicLink(const std::string& path) {
+  auto global_lock = global_critical_region_.Acquire();
+  auto it = symlinks_.find(path);
   if (it == symlinks_.end()) {
     return false;
   }
+  XELOGD("Unregistered symbolic link: %s => %s", it->first.c_str(),
+         it->second.c_str());
+
   symlinks_.erase(it);
   return true;
 }
 
-Entry* VirtualFileSystem::ResolvePath(std::string path) {
-  std::lock_guard<xe::mutex> lock(mutex_);
+bool VirtualFileSystem::IsSymbolicLink(const std::string& path) {
+  auto global_lock = global_critical_region_.Acquire();
+  auto it = symlinks_.find(path);
+  if (it == symlinks_.end()) {
+    return false;
+  }
+  return true;
+}
+
+Entry* VirtualFileSystem::ResolvePath(const std::string& path) {
+  auto global_lock = global_critical_region_.Acquire();
 
   // Resolve relative paths
   std::string normalized_path(xe::filesystem::CanonicalizePath(path));
@@ -58,17 +84,29 @@ Entry* VirtualFileSystem::ResolvePath(std::string path) {
   // Resolve symlinks.
   std::string device_path;
   std::string relative_path;
-  for (const auto& it : symlinks_) {
-    if (xe::find_first_of_case(normalized_path, it.first) == 0) {
-      // Found symlink!
-      device_path = it.second;
-      relative_path = normalized_path.substr(it.first.size());
+  for (int i = 0; i < 2; i++) {
+    for (const auto& it : symlinks_) {
+      if (xe::find_first_of_case(normalized_path, it.first) == 0) {
+        // Found symlink!
+        device_path = it.second;
+        if (relative_path.empty()) {
+          relative_path = normalized_path.substr(it.first.size());
+        }
+
+        // Bit of a cheaty move here, but allows double symlinks to be resolved.
+        normalized_path = device_path;
+        break;
+      }
+    }
+
+    // Break as soon as we've completely resolved the symlinks to a device.
+    if (!IsSymbolicLink(device_path)) {
       break;
     }
   }
 
-  // Not to fret, check to see if the path is fully qualified.
   if (device_path.empty()) {
+    // Symlink wasn't passed in - Check if we've received a raw device name.
     for (auto& device : devices_) {
       if (xe::find_first_of_case(normalized_path, device->mount_path()) == 0) {
         device_path = device->mount_path();
@@ -94,12 +132,13 @@ Entry* VirtualFileSystem::ResolvePath(std::string path) {
   return nullptr;
 }
 
-Entry* VirtualFileSystem::ResolveBasePath(std::string path) {
+Entry* VirtualFileSystem::ResolveBasePath(const std::string& path) {
   auto base_path = xe::find_base_path(path);
   return ResolvePath(base_path);
 }
 
-Entry* VirtualFileSystem::CreatePath(std::string path, uint32_t attributes) {
+Entry* VirtualFileSystem::CreatePath(const std::string& path,
+                                     uint32_t attributes) {
   // Create all required directories recursively.
   auto path_parts = xe::split_path(path);
   if (path_parts.empty()) {
@@ -127,7 +166,7 @@ Entry* VirtualFileSystem::CreatePath(std::string path, uint32_t attributes) {
                                    attributes);
 }
 
-bool VirtualFileSystem::DeletePath(std::string path) {
+bool VirtualFileSystem::DeletePath(const std::string& path) {
   auto entry = ResolvePath(path);
   if (!entry) {
     return false;
@@ -140,12 +179,13 @@ bool VirtualFileSystem::DeletePath(std::string path) {
   return parent->Delete(entry);
 }
 
-X_STATUS VirtualFileSystem::OpenFile(KernelState* kernel_state,
-                                     std::string path,
+X_STATUS VirtualFileSystem::OpenFile(const std::string& path,
                                      FileDisposition creation_disposition,
-                                     uint32_t desired_access,
-                                     object_ref<XFile>* out_file,
-                                     FileAction* out_action) {
+                                     uint32_t desired_access, bool is_directory,
+                                     File** out_file, FileAction* out_action) {
+  // TODO(gibbed): should 'is_directory' remain as a bool or should it be
+  // flipped to a generic FileAttributeFlags?
+
   // Cleanup access.
   if (desired_access & FileAccess::kGenericRead) {
     desired_access |= FileAccess::kFileReadData;
@@ -218,6 +258,10 @@ X_STATUS VirtualFileSystem::OpenFile(KernelState* kernel_state,
   } else {
     // May need to delete, if it exists.
     switch (creation_disposition) {
+      case FileDisposition::kCreate:
+        // Shouldn't be possible to hit this.
+        assert_always();
+        return X_STATUS_ACCESS_DENIED;
       case FileDisposition::kSuperscede:
         // Replace (by delete + recreate).
         if (!entry->Delete()) {
@@ -244,14 +288,15 @@ X_STATUS VirtualFileSystem::OpenFile(KernelState* kernel_state,
   }
   if (!entry) {
     // Create if needed (either new or as a replacement).
-    entry = CreatePath(path, kFileAttributeNormal);
+    entry = CreatePath(
+        path, !is_directory ? kFileAttributeNormal : kFileAttributeDirectory);
     if (!entry) {
       return X_STATUS_ACCESS_DENIED;
     }
   }
 
   // Open.
-  auto result = entry->Open(kernel_state, desired_access, out_file);
+  auto result = entry->Open(desired_access, out_file);
   if (XFAILED(result)) {
     *out_action = FileAction::kDoesNotExist;
   }

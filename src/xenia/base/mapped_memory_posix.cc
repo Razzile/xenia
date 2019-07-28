@@ -11,6 +11,7 @@
 
 #include <sys/mman.h>
 #include <cstdio>
+#include <memory>
 
 #include "xenia/base/string.h"
 
@@ -39,17 +40,18 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(const std::wstring& path,
   const char* mode_str;
   int prot;
   switch (mode) {
-    case Mode::READ:
+    case Mode::kRead:
       mode_str = "rb";
       prot = PROT_READ;
       break;
-    case Mode::READ_WRITE:
+    case Mode::kReadWrite:
       mode_str = "r+b";
       prot = PROT_READ | PROT_WRITE;
       break;
   }
 
-  auto mm = std::make_unique<PosixMappedMemory>(path, mode);
+  auto mm =
+      std::unique_ptr<PosixMappedMemory>(new PosixMappedMemory(path, mode));
 
   mm->file_handle = fopen(xe::to_string(path).c_str(), mode_str);
   if (!mm->file_handle) {
@@ -72,6 +74,12 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(const std::wstring& path,
   }
 
   return std::move(mm);
+}
+
+std::unique_ptr<ChunkedMappedMemoryWriter> ChunkedMappedMemoryWriter::Open(
+    const std::wstring& path, size_t chunk_size, bool low_address_space) {
+  // TODO(DrChat)
+  return nullptr;
 }
 
 }  // namespace xe

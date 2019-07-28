@@ -13,30 +13,25 @@
 #include <memory>
 #include <vector>
 
-#include "xenia/cpu/processor.h"
 #include "xenia/hid/input.h"
-#include "xenia/memory.h"
+#include "xenia/hid/input_driver.h"
 #include "xenia/xbox.h"
 
 namespace xe {
-class Emulator;
+namespace ui {
+class Window;
+}  // namespace ui
 }  // namespace xe
 
 namespace xe {
 namespace hid {
 
-class InputDriver;
-
 class InputSystem {
  public:
-  InputSystem(Emulator* emulator);
+  explicit InputSystem(xe::ui::Window* window);
   ~InputSystem();
 
-  static std::unique_ptr<InputSystem> Create(Emulator* emulator);
-
-  Emulator* emulator() const { return emulator_; }
-  Memory* memory() const { return memory_; }
-  cpu::Processor* processor() const { return processor_; }
+  xe::ui::Window* window() const { return window_; }
 
   X_STATUS Setup();
 
@@ -50,9 +45,7 @@ class InputSystem {
                         X_INPUT_KEYSTROKE* out_keystroke);
 
  private:
-  Emulator* emulator_;
-  Memory* memory_;
-  cpu::Processor* processor_;
+  xe::ui::Window* window_ = nullptr;
 
   std::vector<std::unique_ptr<InputDriver>> drivers_;
 };

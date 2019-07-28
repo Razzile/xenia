@@ -15,13 +15,9 @@
 #include "xenia/base/assert.h"
 #include "xenia/base/platform.h"
 
-#if XE_PLATFORM_MAC
-#include <libkern/OSByteOrder.h>
-#endif  // XE_PLATFORM_MAC
-
 namespace xe {
 
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
 #define XENIA_BASE_BYTE_SWAP_16 _byteswap_ushort
 #define XENIA_BASE_BYTE_SWAP_32 _byteswap_ulong
 #define XENIA_BASE_BYTE_SWAP_64 _byteswap_uint64
@@ -33,7 +29,7 @@ namespace xe {
 #define XENIA_BASE_BYTE_SWAP_16 __bswap_16
 #define XENIA_BASE_BYTE_SWAP_32 __bswap_32
 #define XENIA_BASE_BYTE_SWAP_64 __bswap_64
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 
 inline int8_t byte_swap(int8_t value) { return value; }
 inline uint8_t byte_swap(uint8_t value) { return value; }
@@ -73,6 +69,8 @@ template <typename T>
 inline T byte_swap(T value) {
   if (sizeof(T) == 4) {
     return static_cast<T>(byte_swap(static_cast<uint32_t>(value)));
+  } else if (sizeof(T) == 2) {
+    return static_cast<T>(byte_swap(static_cast<uint16_t>(value)));
   } else {
     assert_always("not handled");
   }
@@ -81,8 +79,8 @@ inline T byte_swap(T value) {
 template <typename T>
 struct be {
   be() = default;
-  be(const T& src) : value(xe::byte_swap(src)) {}
-  be(const be& other) { value = other.value; }
+  be(const T& src) : value(xe::byte_swap(src)) {}  // NOLINT(runtime/explicit)
+  be(const be& other) { value = other.value; }     // NOLINT(runtime/explicit)
   operator T() const { return xe::byte_swap(value); }
 
   be<T>& operator+=(int a) {

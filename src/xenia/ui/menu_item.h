@@ -10,14 +10,17 @@
 #ifndef XENIA_UI_MENU_ITEM_H_
 #define XENIA_UI_MENU_ITEM_H_
 
+#include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
-#include "xenia/base/delegate.h"
 #include "xenia/ui/ui_event.h"
 
 namespace xe {
 namespace ui {
+
+class Window;
 
 class MenuItem {
  public:
@@ -30,6 +33,14 @@ class MenuItem {
     kString,  // Menu is just a string
   };
 
+  static std::unique_ptr<MenuItem> Create(Type type);
+  static std::unique_ptr<MenuItem> Create(Type type, const std::wstring& text);
+  static std::unique_ptr<MenuItem> Create(Type type, const std::wstring& text,
+                                          std::function<void()> callback);
+  static std::unique_ptr<MenuItem> Create(Type type, const std::wstring& text,
+                                          const std::wstring& hotkey,
+                                          std::function<void()> callback);
+
   virtual ~MenuItem();
 
   MenuItem* parent_item() const { return parent_item_; }
@@ -41,23 +52,26 @@ class MenuItem {
   void AddChild(std::unique_ptr<MenuItem> child_item);
   void AddChild(MenuItemPtr child_item);
   void RemoveChild(MenuItem* child_item);
+  MenuItem* child(size_t index);
 
-  Delegate<UIEvent> on_selected;
+  virtual void EnableMenuItem(Window& window) = 0;
+  virtual void DisableMenuItem(Window& window) = 0;
 
  protected:
-  MenuItem(Type type);
-  MenuItem(Type type, const std::wstring& text, const std::wstring& hotkey);
+  MenuItem(Type type, const std::wstring& text, const std::wstring& hotkey,
+           std::function<void()> callback);
 
   virtual void OnChildAdded(MenuItem* child_item) {}
   virtual void OnChildRemoved(MenuItem* child_item) {}
 
-  virtual void OnSelected(UIEvent& e);
+  virtual void OnSelected(UIEvent* e);
 
   Type type_;
   MenuItem* parent_item_;
   std::vector<MenuItemPtr> children_;
   std::wstring text_;
   std::wstring hotkey_;
+  std::function<void()> callback_;
 };
 
 }  // namespace ui

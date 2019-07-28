@@ -21,7 +21,7 @@ namespace xe {
 template <typename... Args>
 class Delegate {
  public:
-  typedef std::function<void(Args&...)> Listener;
+  typedef std::function<void(Args...)> Listener;
 
   void AddListener(Listener const& listener) {
     std::lock_guard<std::mutex> guard(lock_);
@@ -33,10 +33,37 @@ class Delegate {
     listeners_.clear();
   }
 
-  void operator()(Args&... args) {
+  void operator()(Args... args) {
     std::lock_guard<std::mutex> guard(lock_);
     for (auto& listener : listeners_) {
       listener(args...);
+    }
+  }
+
+ private:
+  std::mutex lock_;
+  std::vector<Listener> listeners_;
+};
+
+template <>
+class Delegate<void> {
+ public:
+  typedef std::function<void()> Listener;
+
+  void AddListener(Listener const& listener) {
+    std::lock_guard<std::mutex> guard(lock_);
+    listeners_.push_back(listener);
+  }
+
+  void RemoveAllListeners() {
+    std::lock_guard<std::mutex> guard(lock_);
+    listeners_.clear();
+  }
+
+  void operator()() {
+    std::lock_guard<std::mutex> guard(lock_);
+    for (auto& listener : listeners_) {
+      listener();
     }
   }
 

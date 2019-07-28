@@ -12,7 +12,7 @@
 
 #include "xenia/base/assert.h"
 #include "xenia/base/byte_order.h"
-#include "xenia/gpu/ucode.h"
+#include "xenia/base/platform.h"
 
 namespace xe {
 namespace gpu {
@@ -30,11 +30,60 @@ enum class PrimitiveType : uint32_t {
   kTriangleList = 0x04,
   kTriangleFan = 0x05,
   kTriangleStrip = 0x06,
-  kUnknown0x07 = 0x07,
+  kTriangleWithWFlags = 0x07,
   kRectangleList = 0x08,
   kLineLoop = 0x0C,
   kQuadList = 0x0D,
   kQuadStrip = 0x0E,
+  kPolygon = 0x0F,
+
+  // Starting with this primitive mode, registers like VGT_OUTPUT_PATH_CNTL have
+  // effect (deduced from R6xx/R7xx registers, and Halo 3 also doesn't reset
+  // VGT_OUTPUT_PATH_CNTL after the first draw with tessellation).
+  // TODO(Triang3l): Find out if VGT_DRAW_INITIATOR (0x21FC on Adreno 2xx, but
+  // not seen being used in games) specifies the major mode (or if it's set
+  // somewhere else).
+  kExplicitMajorModeForceStart = 0x10,
+
+  k2DCopyRectListV0 = 0x10,
+  k2DCopyRectListV1 = 0x11,
+  k2DCopyRectListV2 = 0x12,
+  k2DCopyRectListV3 = 0x13,
+  k2DFillRectList = 0x14,
+  k2DLineStrip = 0x15,
+  k2DTriStrip = 0x16,
+
+  // Tessellation patches (D3DTPT) when VGT_OUTPUT_PATH_CNTL & 3 is
+  // VGT_OUTPATH_TESS_EN (1).
+  kLinePatch = 0x10,
+  kTrianglePatch = 0x11,
+  kQuadPatch = 0x12,
+};
+
+inline bool IsPrimitiveTwoFaced(bool tessellated, PrimitiveType type) {
+  if (tessellated) {
+    return type == PrimitiveType::kTrianglePatch ||
+           type == PrimitiveType::kQuadPatch;
+  }
+  switch (type) {
+    case PrimitiveType::kTriangleList:
+    case PrimitiveType::kTriangleFan:
+    case PrimitiveType::kTriangleStrip:
+    case PrimitiveType::kTriangleWithWFlags:
+    case PrimitiveType::kQuadList:
+    case PrimitiveType::kQuadStrip:
+    case PrimitiveType::kPolygon:
+      return true;
+    default:
+      break;
+  }
+  return false;
+}
+
+enum class TessellationMode : uint32_t {
+  kDiscrete = 0,
+  kContinuous = 1,
+  kAdaptive = 2,
 };
 
 enum class Dimension : uint32_t {
@@ -44,14 +93,78 @@ enum class Dimension : uint32_t {
   kCube = 3,
 };
 
-namespace xenos {
+enum class ClampMode : uint32_t {
+  kRepeat = 0,
+  kMirroredRepeat = 1,
+  kClampToEdge = 2,
+  kMirrorClampToEdge = 3,
+  kClampToHalfway = 4,
+  kMirrorClampToHalfway = 5,
+  kClampToBorder = 6,
+  kMirrorClampToBorder = 7,
+};
 
-typedef enum {
-  XE_GPU_INVALIDATE_MASK_VERTEX_SHADER = 1 << 8,
-  XE_GPU_INVALIDATE_MASK_PIXEL_SHADER = 1 << 9,
+// TEX_FORMAT_COMP, known as GPUSIGN on the Xbox 360.
+enum class TextureSign : uint32_t {
+  kUnsigned = 0,
+  // Two's complement texture data.
+  kSigned = 1,
+  // 2*color-1 - https://xboxforums.create.msdn.com/forums/t/107374.aspx
+  kUnsignedBiased = 2,
+  // Linearized when sampled.
+  kGamma = 3,
+};
 
-  XE_GPU_INVALIDATE_MASK_ALL = 0x7FFF,
-} XE_GPU_INVALIDATE_MASK;
+enum class TextureFilter : uint32_t {
+  kPoint = 0,
+  kLinear = 1,
+  kBaseMap = 2,  // Only applicable for mip-filter.
+  kUseFetchConst = 3,
+};
+
+enum class AnisoFilter : uint32_t {
+  kDisabled = 0,
+  kMax_1_1 = 1,
+  kMax_2_1 = 2,
+  kMax_4_1 = 3,
+  kMax_8_1 = 4,
+  kMax_16_1 = 5,
+  kUseFetchConst = 7,
+};
+
+enum class BorderColor : uint32_t {
+  k_AGBR_Black = 0,
+  k_AGBR_White = 1,
+  k_ACBYCR_BLACK = 2,
+  k_ACBCRY_BLACK = 3,
+};
+
+enum class TextureDimension : uint32_t {
+  k1D = 0,
+  k2D = 1,
+  k3D = 2,
+  kCube = 3,
+};
+
+inline int GetTextureDimensionComponentCount(TextureDimension dimension) {
+  switch (dimension) {
+    case TextureDimension::k1D:
+      return 1;
+    case TextureDimension::k2D:
+      return 2;
+    case TextureDimension::k3D:
+    case TextureDimension::kCube:
+      return 3;
+    default:
+      assert_unhandled_case(dimension);
+      return 1;
+  }
+}
+
+enum class SampleLocation : uint32_t {
+  kCentroid = 0,
+  kCenter = 1,
+};
 
 enum class Endian : uint32_t {
   kUnspecified = 0,
@@ -74,6 +187,16 @@ enum class IndexFormat : uint32_t {
   kInt32,
 };
 
+// GPUSURFACENUMBER from a game .pdb. "Repeat" means repeating fraction, it's
+// what ATI calls normalized.
+enum class SurfaceNumFormat : uint32_t {
+  kUnsignedRepeat = 0,
+  kSignedRepeat = 1,
+  kUnsignedInteger = 2,
+  kSignedInteger = 3,
+  kFloat = 7,
+};
+
 enum class MsaaSamples : uint32_t {
   k1X = 0,
   k2X = 1,
@@ -81,40 +204,34 @@ enum class MsaaSamples : uint32_t {
 };
 
 enum class ColorRenderTargetFormat : uint32_t {
-  k_8_8_8_8 = 0,        // D3DFMT_A8R8G8B8 (or ABGR?)
-  k_8_8_8_8_GAMMA = 1,  // D3DFMT_A8R8G8B8 with gamma correction
+  // D3DFMT_A8R8G8B8 (or ABGR?).
+  k_8_8_8_8 = 0,
+  // D3DFMT_A8R8G8B8 with gamma correction.
+  k_8_8_8_8_GAMMA = 1,
   k_2_10_10_10 = 2,
+  // 7e3 [0, 32) RGB, unorm alpha.
+  // http://fileadmin.cs.lth.se/cs/Personal/Michael_Doggett/talks/eg05-xenos-doggett.pdf
   k_2_10_10_10_FLOAT = 3,
+  // Fixed point -32...32.
+  // http://www.students.science.uu.nl/~3220516/advancedgraphics/papers/inferred_lighting.pdf
   k_16_16 = 4,
+  // Fixed point -32...32.
   k_16_16_16_16 = 5,
   k_16_16_FLOAT = 6,
   k_16_16_16_16_FLOAT = 7,
-  k_2_10_10_10_unknown = 10,
-  k_2_10_10_10_FLOAT_unknown = 12,
+  k_2_10_10_10_AS_10_10_10_10 = 10,
+  k_2_10_10_10_FLOAT_AS_16_16_16_16 = 12,
   k_32_FLOAT = 14,
   k_32_32_FLOAT = 15,
 };
 
 enum class DepthRenderTargetFormat : uint32_t {
   kD24S8 = 0,
+  // 20e4 [0, 2).
   kD24FS8 = 1,
 };
 
-enum class ModeControl : uint32_t {
-  kIgnore = 0,
-  kColorDepth = 4,
-  kDepth = 5,
-  kCopy = 6,
-};
-
-enum class CopyCommand : uint32_t {
-  kRaw = 0,
-  kConvert = 1,
-  kConstantOne = 2,
-  kNull = 3,  // ?
-};
-
-// Subset of a2xx_sq_surfaceformat.
+// Subset of a2xx_sq_surfaceformat - formats that RTs can be resolved to.
 enum class ColorFormat : uint32_t {
   k_8 = 2,
   k_1_5_5_5 = 3,
@@ -138,12 +255,14 @@ enum class ColorFormat : uint32_t {
   k_32_FLOAT = 36,
   k_32_32_FLOAT = 37,
   k_32_32_32_32_FLOAT = 38,
-  k_2_10_10_10_FLOAT = 62,
-
-  kUnknown0x36 = 0x36,  // not sure, but like 8888
+  k_8_8_8_8_AS_16_16_16_16 = 50,
+  k_2_10_10_10_AS_16_16_16_16 = 54,
+  k_10_11_11_AS_16_16_16_16 = 55,
+  k_11_11_10_AS_16_16_16_16 = 56,
 };
 
 enum class VertexFormat : uint32_t {
+  kUndefined = 0,
   k_8_8_8_8 = 6,
   k_2_10_10_10 = 7,
   k_10_11_11 = 16,
@@ -160,23 +279,21 @@ enum class VertexFormat : uint32_t {
   k_32_32_32_32_FLOAT = 38,
   k_32_32_32_FLOAT = 57,
 };
+
 inline int GetVertexFormatComponentCount(VertexFormat format) {
   switch (format) {
     case VertexFormat::k_32:
     case VertexFormat::k_32_FLOAT:
       return 1;
-      break;
     case VertexFormat::k_16_16:
     case VertexFormat::k_16_16_FLOAT:
     case VertexFormat::k_32_32:
     case VertexFormat::k_32_32_FLOAT:
       return 2;
-      break;
     case VertexFormat::k_10_11_11:
     case VertexFormat::k_11_11_10:
     case VertexFormat::k_32_32_32_FLOAT:
       return 3;
-      break;
     case VertexFormat::k_8_8_8_8:
     case VertexFormat::k_2_10_10_10:
     case VertexFormat::k_16_16_16_16:
@@ -184,12 +301,104 @@ inline int GetVertexFormatComponentCount(VertexFormat format) {
     case VertexFormat::k_32_32_32_32:
     case VertexFormat::k_32_32_32_32_FLOAT:
       return 4;
-      break;
     default:
       assert_unhandled_case(format);
       return 0;
   }
 }
+
+inline int GetVertexFormatSizeInWords(VertexFormat format) {
+  switch (format) {
+    case VertexFormat::k_8_8_8_8:
+    case VertexFormat::k_2_10_10_10:
+    case VertexFormat::k_10_11_11:
+    case VertexFormat::k_11_11_10:
+    case VertexFormat::k_16_16:
+    case VertexFormat::k_16_16_FLOAT:
+    case VertexFormat::k_32:
+    case VertexFormat::k_32_FLOAT:
+      return 1;
+    case VertexFormat::k_16_16_16_16:
+    case VertexFormat::k_16_16_16_16_FLOAT:
+    case VertexFormat::k_32_32:
+    case VertexFormat::k_32_32_FLOAT:
+      return 2;
+    case VertexFormat::k_32_32_32_FLOAT:
+      return 3;
+    case VertexFormat::k_32_32_32_32:
+    case VertexFormat::k_32_32_32_32_FLOAT:
+      return 4;
+    default:
+      assert_unhandled_case(format);
+      return 1;
+  }
+}
+
+// adreno_rb_blend_factor
+enum class BlendFactor : uint32_t {
+  kZero = 0,
+  kOne = 1,
+  kSrcColor = 4,
+  kOneMinusSrcColor = 5,
+  kSrcAlpha = 6,
+  kOneMinusSrcAlpha = 7,
+  kDstColor = 8,
+  kOneMinusDstColor = 9,
+  kDstAlpha = 10,
+  kOneMinusDstAlpha = 11,
+  kConstantColor = 12,
+  kOneMinusConstantColor = 13,
+  kConstantAlpha = 14,
+  kOneMinusConstantAlpha = 15,
+  kSrcAlphaSaturate = 16,
+  // SRC1 likely not used on the Xbox 360 - only available in Direct3D 9Ex.
+  kSrc1Color = 20,
+  kOneMinusSrc1Color = 21,
+  kSrc1Alpha = 22,
+  kOneMinusSrc1Alpha = 23,
+};
+
+enum class BlendOp : uint32_t {
+  kAdd = 0,
+  kSubtract = 1,
+  kMin = 2,
+  kMax = 3,
+  kRevSubtract = 4,
+};
+
+namespace xenos {
+
+typedef enum {
+  XE_GPU_INVALIDATE_MASK_VERTEX_SHADER = 1 << 8,
+  XE_GPU_INVALIDATE_MASK_PIXEL_SHADER = 1 << 9,
+
+  XE_GPU_INVALIDATE_MASK_ALL = 0x7FFF,
+} XE_GPU_INVALIDATE_MASK;
+
+enum class ModeControl : uint32_t {
+  kIgnore = 0,
+  kColorDepth = 4,
+  kDepth = 5,
+  kCopy = 6,
+};
+
+enum class CopyCommand : uint32_t {
+  kRaw = 0,
+  kConvert = 1,
+  kConstantOne = 2,
+  kNull = 3,  // ?
+};
+
+// a2xx_rb_copy_sample_select
+enum class CopySampleSelect : uint32_t {
+  k0,
+  k1,
+  k2,
+  k3,
+  k01,
+  k23,
+  k0123,
+};
 
 #define XE_GPU_MAKE_SWIZZLE(x, y, z, w)                        \
   (((XE_GPU_SWIZZLE_##x) << 0) | ((XE_GPU_SWIZZLE_##y) << 3) | \
@@ -272,7 +481,7 @@ typedef union {
     uint32_t vs_resource : 1;
     uint32_t ps_resource : 1;
     uint32_t param_gen : 1;
-    uint32_t unknown0 : 1;
+    uint32_t gen_index_pix : 1;
     uint32_t vs_export_count : 4;
     uint32_t vs_export_mode : 3;
     uint32_t ps_export_depth : 1;
@@ -285,11 +494,12 @@ typedef union {
 // XE_GPU_REG_SHADER_CONSTANT_FETCH_*
 XEPACKEDUNION(xe_gpu_vertex_fetch_t, {
   XEPACKEDSTRUCTANONYMOUS({
-    uint32_t type : 2;
-    uint32_t address : 30;
-    uint32_t endian : 2;
-    uint32_t size : 24;
-    uint32_t unk1 : 6;
+    uint32_t type : 2;      // +0
+    uint32_t address : 30;  // +2
+
+    uint32_t endian : 2;  // +0
+    uint32_t size : 24;   // +2 size in words
+    uint32_t unk1 : 6;    // +26
   });
   XEPACKEDSTRUCTANONYMOUS({
     uint32_t dword_0;
@@ -300,21 +510,25 @@ XEPACKEDUNION(xe_gpu_vertex_fetch_t, {
 // XE_GPU_REG_SHADER_CONSTANT_FETCH_*
 XEPACKEDUNION(xe_gpu_texture_fetch_t, {
   XEPACKEDSTRUCTANONYMOUS({
-    uint32_t type : 2;  // dword_0
-    uint32_t sign_x : 2;
-    uint32_t sign_y : 2;
-    uint32_t sign_z : 2;
-    uint32_t sign_w : 2;
-    uint32_t clamp_x : 3;
-    uint32_t clamp_y : 3;
-    uint32_t clamp_z : 3;
-    uint32_t unk0 : 3;
-    uint32_t pitch : 9;
-    uint32_t tiled : 1;
-    uint32_t format : 6;  // dword_1
-    uint32_t endianness : 2;
-    uint32_t unk1 : 4;
-    uint32_t address : 20;
+    uint32_t type : 2;      // +0 dword_0
+    uint32_t sign_x : 2;    // +2
+    uint32_t sign_y : 2;    // +4
+    uint32_t sign_z : 2;    // +6
+    uint32_t sign_w : 2;    // +8
+    uint32_t clamp_x : 3;   // +10
+    uint32_t clamp_y : 3;   // +13
+    uint32_t clamp_z : 3;   // +16
+    uint32_t unused_0 : 3;  // +19
+    uint32_t pitch : 9;     // +22 byte_pitch >> 5
+    uint32_t tiled : 1;     // +31
+
+    uint32_t format : 6;         // +0 dword_1
+    uint32_t endianness : 2;     // +6
+    uint32_t request_size : 2;   // +8
+    uint32_t stacked : 1;        // +10
+    uint32_t clamp_policy : 1;   // +11 d3d/opengl
+    uint32_t base_address : 20;  // +12
+
     union {  // dword_2
       struct {
         uint32_t width : 24;
@@ -336,22 +550,34 @@ XEPACKEDUNION(xe_gpu_texture_fetch_t, {
         uint32_t depth : 10;
       } size_3d;
     };
-    uint32_t unk3_0 : 1;    // dword_3
-    uint32_t swizzle : 12;  // xyzw, 3b each (XE_GPU_SWIZZLE)
-    uint32_t unk3_1 : 6;
-    uint32_t mag_filter : 2;
-    uint32_t min_filter : 2;
-    uint32_t mip_filter : 2;
-    uint32_t aniso_filter : 3;
-    uint32_t unk3_2 : 3;
-    uint32_t border : 1;
-    uint32_t unk4_0 : 2;  // dword_4
-    uint32_t mip_min_level : 4;
-    uint32_t mip_max_level : 4;
-    uint32_t unk4_1 : 22;
-    uint32_t unk5 : 9;  // dword_5
-    uint32_t dimension : 2;
-    uint32_t unk5b : 21;
+
+    uint32_t num_format : 1;    // +0 dword_3 frac/int
+    uint32_t swizzle : 12;      // +1 xyzw, 3b each (XE_GPU_SWIZZLE)
+    int32_t exp_adjust : 6;     // +13
+    uint32_t mag_filter : 2;    // +19
+    uint32_t min_filter : 2;    // +21
+    uint32_t mip_filter : 2;    // +23
+    uint32_t aniso_filter : 3;  // +25
+    uint32_t unused_3 : 3;      // +28
+    uint32_t border_size : 1;   // +31
+
+    uint32_t vol_mag_filter : 1;    // +0 dword_4
+    uint32_t vol_min_filter : 1;    // +1
+    uint32_t mip_min_level : 4;     // +2
+    uint32_t mip_max_level : 4;     // +6
+    uint32_t mag_aniso_walk : 1;    // +10
+    uint32_t min_aniso_walk : 1;    // +11
+    int32_t lod_bias : 10;          // +12
+    int32_t grad_exp_adjust_h : 5;  // +22
+    int32_t grad_exp_adjust_v : 5;  // +27
+
+    uint32_t border_color : 2;   // +0 dword_5
+    uint32_t force_bcw_max : 1;  // +2
+    uint32_t tri_clamp : 2;      // +3
+    int32_t aniso_bias : 4;      // +5
+    uint32_t dimension : 2;      // +9
+    uint32_t packed_mips : 1;    // +11
+    uint32_t mip_address : 20;   // +12
   });
   XEPACKEDSTRUCTANONYMOUS({
     uint32_t dword_0;
@@ -392,6 +618,68 @@ XEPACKEDUNION(xe_gpu_fetch_group_t, {
   });
 });
 
+// GPU_MEMEXPORT_STREAM_CONSTANT from a game .pdb - float constant for memexport
+// stream configuration.
+// This is used with the floating-point ALU in shaders (written to eA using
+// mad), so the dwords have a normalized exponent when reinterpreted as floats
+// (otherwise they would be flushed to zero), but actually these are packed
+// integers. dword_1 specifically is 2^23 because
+// powf(2.0f, 23.0f) + float(i) == 0x4B000000 | i
+// so mad can pack indices as integers in the lower bits.
+XEPACKEDUNION(xe_gpu_memexport_stream_t, {
+  XEPACKEDSTRUCTANONYMOUS({
+    uint32_t base_address : 30;  // +0 dword_0 physical address >> 2
+    uint32_t const_0x1 : 2;      // +30
+
+    uint32_t const_0x4b000000;  // +0 dword_1
+
+    Endian128 endianness : 3;         // +0 dword_2
+    uint32_t unused_0 : 5;            // +3
+    ColorFormat format : 6;           // +8
+    uint32_t unused_1 : 2;            // +14
+    SurfaceNumFormat num_format : 3;  // +16
+    uint32_t red_blue_swap : 1;       // +19
+    uint32_t const_0x4b0 : 12;        // +20
+
+    uint32_t index_count : 23;  // +0 dword_3
+    uint32_t const_0x96 : 9;    // +23
+  });
+  XEPACKEDSTRUCTANONYMOUS({
+    uint32_t dword_0;
+    uint32_t dword_1;
+    uint32_t dword_2;
+    uint32_t dword_3;
+  });
+});
+
+// Enum of event values used for VGT_EVENT_INITIATOR
+enum Event {
+  VS_DEALLOC = 0,
+  PS_DEALLOC = 1,
+  VS_DONE_TS = 2,
+  PS_DONE_TS = 3,
+  CACHE_FLUSH_TS = 4,
+  CONTEXT_DONE = 5,
+  CACHE_FLUSH = 6,
+  VIZQUERY_START = 7,
+  VIZQUERY_END = 8,
+  SC_WAIT_WC = 9,
+  MPASS_PS_CP_REFETCH = 10,
+  MPASS_PS_RST_START = 11,
+  MPASS_PS_INCR_START = 12,
+  RST_PIX_CNT = 13,
+  RST_VTX_CNT = 14,
+  TILE_FLUSH = 15,
+  CACHE_FLUSH_AND_INV_TS_EVENT = 20,
+  ZPASS_DONE = 21,
+  CACHE_FLUSH_AND_INV_EVENT = 22,
+  PERFCOUNTER_START = 23,
+  PERFCOUNTER_STOP = 24,
+  SCREEN_EXT_INIT = 25,
+  SCREEN_EXT_RPT = 26,
+  VS_FETCH_DONE_TS = 27,
+};
+
 // Opcodes (IT_OPCODE) for Type-3 commands in the ringbuffer.
 // https://github.com/freedreno/amd-gpu/blob/master/include/api/gsl_pm4types.h
 // Not sure if all of these are used.
@@ -407,7 +695,7 @@ enum Type3Opcode {
   PM4_WAIT_FOR_IDLE         = 0x26,   // wait for the IDLE state of the engine
   PM4_WAIT_REG_MEM          = 0x3c,   // wait until a register or memory location is a specific value
   PM4_WAIT_REG_EQ           = 0x52,   // wait until a register location is equal to a specific value
-  PM4_WAT_REG_GTE           = 0x53,   // wait until a register location is >= a specific value
+  PM4_WAIT_REG_GTE          = 0x53,   // wait until a register location is >= a specific value
   PM4_WAIT_UNTIL_READ       = 0x5c,   // wait until a read completes
   PM4_WAIT_IB_PFD_COMPLETE  = 0x5d,   // wait until all base/size writes from an IB_PFD packet have completed
 
@@ -432,9 +720,9 @@ enum Type3Opcode {
   PM4_VIZ_QUERY             = 0x23,   // begin/end initiator for viz query extent processing
   PM4_SET_STATE             = 0x25,   // fetch state sub-blocks and initiate shader code DMAs
   PM4_SET_CONSTANT          = 0x2d,   // load constant into chip and to memory
-  PM4_SET_CONSTANT2         = 0x55,
+  PM4_SET_CONSTANT2         = 0x55,   // INCR_UPDATE_STATE
+  PM4_SET_SHADER_CONSTANTS  = 0x56,   // INCR_UPDT_CONST
   PM4_LOAD_ALU_CONSTANT     = 0x2f,   // load constants from memory
-  PM4_SET_SHADER_CONSTANTS  = 0x56,   // ?? constant values
   PM4_IM_LOAD               = 0x27,   // load sequencer instruction memory (pointer-based)
   PM4_IM_LOAD_IMMEDIATE     = 0x2b,   // load sequencer instruction memory (code embedded in packet)
   PM4_LOAD_CONSTANT_CONTEXT = 0x2e,   // load constants from a location in memory
@@ -461,20 +749,18 @@ enum Type3Opcode {
 };
 // clang-format on
 
-template <uint16_t index, uint16_t count, bool one_reg = false>
-constexpr inline uint32_t MakePacketType0() {
+inline uint32_t MakePacketType0(uint16_t index, uint16_t count,
+                                bool one_reg = false) {
   // ttcccccc cccccccc oiiiiiii iiiiiiii
-  static_assert(index <= 0x7FFF, "index must be <= 0x7FFF");
-  static_assert(count >= 1 && count <= 0x4000,
-                "count must be >= 1 and <= 0x4000");
+  assert(index <= 0x7FFF);
+  assert(count >= 1 && count <= 0x4000);
   return (0u << 30) | (((count - 1) & 0x3FFF) << 16) | (index & 0x7FFF);
 }
 
-template <uint16_t index_1, uint16_t index_2>
-constexpr inline uint32_t MakePacketType1() {
+inline uint32_t MakePacketType1(uint16_t index_1, uint16_t index_2) {
   // tt?????? ??222222 22222111 11111111
-  static_assert(index_1 <= 0x7FF, "index_1 must be <= 0x7FF");
-  static_assert(index_2 <= 0x7FF, "index_2 must be <= 0x7FF");
+  assert(index_1 <= 0x7FF);
+  assert(index_2 <= 0x7FF);
   return (1u << 30) | ((index_2 & 0x7FF) << 11) | (index_1 & 0x7FF);
 }
 
@@ -483,12 +769,11 @@ constexpr inline uint32_t MakePacketType2() {
   return (2u << 30);
 }
 
-template <Type3Opcode opcode, uint16_t count, bool predicate = false>
-constexpr inline uint32_t MakePacketType3() {
+inline uint32_t MakePacketType3(Type3Opcode opcode, uint16_t count,
+                                bool predicate = false) {
   // ttcccccc cccccccc ?ooooooo ???????p
-  static_assert(opcode <= 0x7F, "opcode must be <= 0x7F");
-  static_assert(count >= 1 && count <= 0x4000,
-                "count must be >= 1 and <= 0x4000");
+  assert(opcode <= 0x7F);
+  assert(count >= 1 && count <= 0x4000);
   return (3u << 30) | (((count - 1) & 0x3FFF) << 16) | ((opcode & 0x7F) << 8) |
          (predicate ? 1 : 0);
 }

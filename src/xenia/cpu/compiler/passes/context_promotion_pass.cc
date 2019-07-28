@@ -11,9 +11,12 @@
 
 #include <gflags/gflags.h>
 
+#include "xenia/base/profiling.h"
 #include "xenia/cpu/compiler/compiler.h"
+#include "xenia/cpu/ppc/ppc_context.h"
 #include "xenia/cpu/processor.h"
-#include "xenia/profiling.h"
+
+DECLARE_bool(debug);
 
 DEFINE_bool(store_all_context_values, false,
             "Don't strip dead context stores to aid in debugging.");
@@ -26,7 +29,6 @@ namespace passes {
 // TODO(benvanik): remove when enums redefined.
 using namespace xe::cpu::hir;
 
-using xe::cpu::frontend::ContextInfo;
 using xe::cpu::hir::Block;
 using xe::cpu::hir::HIRBuilder;
 using xe::cpu::hir::Instr;
@@ -42,9 +44,8 @@ bool ContextPromotionPass::Initialize(Compiler* compiler) {
   }
 
   // This is a terrible implementation.
-  ContextInfo* context_info = processor_->frontend()->context_info();
-  context_values_.resize(context_info->size());
-  context_validity_.resize(static_cast<uint32_t>(context_info->size()));
+  context_values_.resize(sizeof(ppc::PPCContext));
+  context_validity_.resize(static_cast<uint32_t>(sizeof(ppc::PPCContext)));
 
   return true;
 }
@@ -74,7 +75,9 @@ bool ContextPromotionPass::Run(HIRBuilder* builder) {
   }
 
   // Remove all dead stores.
-  if (!FLAGS_store_all_context_values) {
+  // This will break debugging as we can't recover this information when
+  // trying to extract stack traces/register values, so we don't do that.
+  if (!FLAGS_debug && !FLAGS_store_all_context_values) {
     block = builder->first_block();
     while (block) {
       RemoveDeadStoresBlock(block);

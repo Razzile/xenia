@@ -10,14 +10,12 @@
 #ifndef XENIA_BASE_RESET_SCOPE_H_
 #define XENIA_BASE_RESET_SCOPE_H_
 
-#include <mutex>
-
 namespace xe {
 
 template <typename T>
 class ResetScope {
  public:
-  ResetScope(T* value) : value_(value) {}
+  explicit ResetScope(T* value) : value_(value) {}
   ~ResetScope() {
     if (value_) {
       value_->Reset();

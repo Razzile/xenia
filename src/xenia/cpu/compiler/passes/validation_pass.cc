@@ -10,10 +10,10 @@
 #include "xenia/cpu/compiler/passes/validation_pass.h"
 
 #include "xenia/base/assert.h"
+#include "xenia/base/profiling.h"
 #include "xenia/cpu/backend/backend.h"
 #include "xenia/cpu/compiler/compiler.h"
 #include "xenia/cpu/processor.h"
-#include "xenia/profiling.h"
 
 namespace xe {
 namespace cpu {
@@ -37,7 +37,7 @@ bool ValidationPass::Run(HIRBuilder* builder) {
 #if 0
   StringBuffer str;
   builder->Dump(&str);
-  printf(str.GetString());
+  printf("%s", str.GetString());
   fflush(stdout);
   str.Reset();
 #endif  // 0

@@ -10,7 +10,9 @@
 #ifndef XENIA_UI_FILE_PICKER_H_
 #define XENIA_UI_FILE_PICKER_H_
 
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace xe {
@@ -26,6 +28,8 @@ class FilePicker {
     kFile = 0,
     kDirectory = 1,
   };
+
+  static std::unique_ptr<FilePicker> Create();
 
   FilePicker()
       : mode_(Mode::kOpen),

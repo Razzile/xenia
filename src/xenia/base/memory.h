@@ -10,6 +10,7 @@
 #ifndef XENIA_BASE_MEMORY_H_
 #define XENIA_BASE_MEMORY_H_
 
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -18,6 +19,90 @@
 #include "xenia/base/byte_order.h"
 
 namespace xe {
+namespace memory {
+
+// Returns the native page size of the system, in bytes.
+// This should be ~4KiB.
+size_t page_size();
+
+// Returns the allocation granularity of the system, in bytes.
+// This is likely 64KiB.
+size_t allocation_granularity();
+
+enum class PageAccess {
+  kNoAccess = 0,
+  kReadOnly = 1 << 0,
+  kReadWrite = kReadOnly | 1 << 1,
+  kExecuteReadWrite = kReadWrite | 1 << 2,
+};
+
+enum class AllocationType {
+  kReserve = 1 << 0,
+  kCommit = 1 << 1,
+  kReserveCommit = kReserve | kCommit,
+};
+
+enum class DeallocationType {
+  kRelease = 1 << 0,
+  kDecommit = 1 << 1,
+};
+
+// Allocates a block of memory at the given page-aligned base address.
+// Fails if the memory is not available.
+// Specify nullptr for base_address to leave it up to the system.
+void* AllocFixed(void* base_address, size_t length,
+                 AllocationType allocation_type, PageAccess access);
+
+// Deallocates and/or releases the given block of memory.
+// When releasing memory length must be zero, as all pages in the region are
+// released.
+bool DeallocFixed(void* base_address, size_t length,
+                  DeallocationType deallocation_type);
+
+// Sets the access rights for the given block of memory and returns the previous
+// access rights. Both base_address and length will be adjusted to page_size().
+bool Protect(void* base_address, size_t length, PageAccess access,
+             PageAccess* out_old_access);
+
+// Queries a region of pages to get the access rights. This will modify the
+// length parameter to the length of pages with the same consecutive access
+// rights. The length will start from the first byte of the first page of
+// the region.
+bool QueryProtect(void* base_address, size_t& length, PageAccess& access_out);
+
+// Allocates a block of memory for a type with the given alignment.
+// The memory must be freed with AlignedFree.
+template <typename T>
+inline T* AlignedAlloc(size_t alignment) {
+#if XE_COMPILER_MSVC
+  return reinterpret_cast<T*>(_aligned_malloc(sizeof(T), alignment));
+#else
+  void* ptr = nullptr;
+  if (posix_memalign(&ptr, alignment, sizeof(T))) {
+    return nullptr;
+  }
+  return reinterpret_cast<T*>(ptr);
+#endif  // XE_COMPILER_MSVC
+}
+
+// Frees memory previously allocated with AlignedAlloc.
+template <typename T>
+void AlignedFree(T* ptr) {
+#if XE_COMPILER_MSVC
+  _aligned_free(ptr);
+#else
+  free(ptr);
+#endif  // XE_COMPILER_MSVC
+}
+
+typedef void* FileMappingHandle;
+
+FileMappingHandle CreateFileMappingHandle(std::wstring path, size_t length,
+                                          PageAccess access, bool commit);
+void CloseFileMappingHandle(FileMappingHandle handle);
+void* MapFileView(FileMappingHandle handle, void* base_address, size_t length,
+                  PageAccess access, size_t file_offset);
+bool UnmapFileView(FileMappingHandle handle, void* base_address, size_t length);
 
 inline size_t hash_combine(size_t seed) { return seed; }
 
@@ -28,26 +113,25 @@ size_t hash_combine(size_t seed, const T& v, const Ts&... vs) {
   return hash_combine(seed, vs...);
 }
 
-size_t page_size();
+}  // namespace memory
 
-constexpr void* low_address(void* address) {
-  return (void*)(uint64_t(address) & 0xFFFFFFFF);
+// TODO(benvanik): move into xe::memory::
+
+inline void* low_address(void* address) {
+  return reinterpret_cast<void*>(uint64_t(address) & 0xFFFFFFFF);
 }
 
-void copy_and_swap_16_aligned(uint16_t* dest, const uint16_t* src,
-                              size_t count);
-void copy_and_swap_16_unaligned(uint16_t* dest, const uint16_t* src,
-                                size_t count);
-void copy_and_swap_32_aligned(uint32_t* dest, const uint32_t* src,
-                              size_t count);
-void copy_and_swap_32_unaligned(uint32_t* dest, const uint32_t* src,
-                                size_t count);
-void copy_and_swap_64_aligned(uint64_t* dest, const uint64_t* src,
-                              size_t count);
-void copy_and_swap_64_unaligned(uint64_t* dest, const uint64_t* src,
-                                size_t count);
-void copy_and_swap_16_in_32_aligned(uint32_t* dest, const uint32_t* src,
-                                    size_t count);
+void copy_128_aligned(void* dest, const void* src, size_t count);
+
+void copy_and_swap_16_aligned(void* dest, const void* src, size_t count);
+void copy_and_swap_16_unaligned(void* dest, const void* src, size_t count);
+void copy_and_swap_32_aligned(void* dest, const void* src, size_t count);
+void copy_and_swap_32_unaligned(void* dest, const void* src, size_t count);
+void copy_and_swap_64_aligned(void* dest, const void* src, size_t count);
+void copy_and_swap_64_unaligned(void* dest, const void* src, size_t count);
+void copy_and_swap_16_in_32_aligned(void* dest, const void* src, size_t count);
+void copy_and_swap_16_in_32_unaligned(void* dest, const void* src,
+                                      size_t count);
 
 template <typename T>
 void copy_and_swap(T* dest, const T* src, size_t count) {

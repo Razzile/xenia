@@ -18,12 +18,12 @@ namespace nop {
 
 class NopAudioSystem : public AudioSystem {
  public:
-  NopAudioSystem(Emulator* emulator);
+  explicit NopAudioSystem(cpu::Processor* processor);
   ~NopAudioSystem() override;
 
-  static std::unique_ptr<AudioSystem> Create(Emulator* emulator);
+  static std::unique_ptr<AudioSystem> Create(cpu::Processor* processor);
 
-  X_STATUS CreateDriver(size_t index, HANDLE wait_handle,
+  X_STATUS CreateDriver(size_t index, xe::threading::Semaphore* semaphore,
                         AudioDriver** out_driver) override;
   void DestroyDriver(AudioDriver* driver) override;
 };

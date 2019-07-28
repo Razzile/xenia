@@ -23,7 +23,7 @@ class Clock {
   // Host time, in FILETIME format.
   static uint64_t QueryHostSystemTime();
   // Queries the milliseconds since the host began.
-  static uint32_t QueryHostUptimeMillis();
+  static uint64_t QueryHostUptimeMillis();
 
   // Guest time scalar.
   static double guest_time_scalar();
@@ -47,12 +47,17 @@ class Clock {
   // Queries the milliseconds since the guest began, accounting for scaling.
   static uint32_t QueryGuestUptimeMillis();
 
+  // Sets the guest tick count for the current thread.
+  static void SetGuestTickCount(uint64_t tick_count);
+  // Sets the system time for the current thread.
+  static void SetGuestSystemTime(uint64_t system_time);
+
   // Scales a time duration in milliseconds, from guest time.
   static uint32_t ScaleGuestDurationMillis(uint32_t guest_ms);
   // Scales a time duration in 100ns ticks like FILETIME, from guest time.
   static int64_t ScaleGuestDurationFileTime(int64_t guest_file_time);
   // Scales a time duration represented as a timeval, from guest time.
-  static void ScaleGuestDurationTimeval(long* tv_sec, long* tv_usec);
+  static void ScaleGuestDurationTimeval(int32_t* tv_sec, int32_t* tv_usec);
 };
 
 }  // namespace xe

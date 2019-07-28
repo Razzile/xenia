@@ -14,28 +14,22 @@
 namespace xe {
 namespace vfs {
 
-HostPathFile::HostPathFile(KernelState* kernel_state, uint32_t file_access,
-                           HostPathEntry* entry, HANDLE file_handle)
-    : XFile(kernel_state, file_access, entry),
-      entry_(entry),
-      file_handle_(file_handle) {}
+HostPathFile::HostPathFile(
+    uint32_t file_access, HostPathEntry* entry,
+    std::unique_ptr<xe::filesystem::FileHandle> file_handle)
+    : File(file_access, entry), file_handle_(std::move(file_handle)) {}
 
-HostPathFile::~HostPathFile() { CloseHandle(file_handle_); }
+HostPathFile::~HostPathFile() = default;
+
+void HostPathFile::Destroy() { delete this; }
 
 X_STATUS HostPathFile::ReadSync(void* buffer, size_t buffer_length,
                                 size_t byte_offset, size_t* out_bytes_read) {
-  if (!(file_access() & FileAccess::kFileReadData)) {
+  if (!(file_access_ & FileAccess::kFileReadData)) {
     return X_STATUS_ACCESS_DENIED;
   }
 
-  OVERLAPPED overlapped;
-  overlapped.Pointer = (PVOID)byte_offset;
-  overlapped.hEvent = NULL;
-  DWORD bytes_read = 0;
-  BOOL read = ReadFile(file_handle_, buffer, (DWORD)buffer_length, &bytes_read,
-                       &overlapped);
-  if (read) {
-    *out_bytes_read = bytes_read;
+  if (file_handle_->Read(byte_offset, buffer, buffer_length, out_bytes_read)) {
     return X_STATUS_SUCCESS;
   } else {
     return X_STATUS_END_OF_FILE;
@@ -45,19 +39,25 @@ X_STATUS HostPathFile::ReadSync(void* buffer, size_t buffer_length,
 X_STATUS HostPathFile::WriteSync(const void* buffer, size_t buffer_length,
                                  size_t byte_offset,
                                  size_t* out_bytes_written) {
-  if (!(file_access() & FileAccess::kFileWriteData |
-        FileAccess::kFileAppendData)) {
+  if (!(file_access_ &
+        (FileAccess::kFileWriteData | FileAccess::kFileAppendData))) {
     return X_STATUS_ACCESS_DENIED;
   }
 
-  OVERLAPPED overlapped;
-  overlapped.Pointer = (PVOID)byte_offset;
-  overlapped.hEvent = NULL;
-  DWORD bytes_written = 0;
-  BOOL wrote = WriteFile(file_handle_, buffer, (DWORD)buffer_length,
-                         &bytes_written, &overlapped);
-  if (wrote) {
-    *out_bytes_written = bytes_written;
+  if (file_handle_->Write(byte_offset, buffer, buffer_length,
+                          out_bytes_written)) {
+    return X_STATUS_SUCCESS;
+  } else {
+    return X_STATUS_END_OF_FILE;
+  }
+}
+
+X_STATUS HostPathFile::SetLength(size_t length) {
+  if (!(file_access_ & FileAccess::kFileWriteData)) {
+    return X_STATUS_ACCESS_DENIED;
+  }
+
+  if (file_handle_->SetLength(length)) {
     return X_STATUS_SUCCESS;
   } else {
     return X_STATUS_END_OF_FILE;

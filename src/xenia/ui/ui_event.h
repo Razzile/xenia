@@ -13,23 +13,44 @@
 namespace xe {
 namespace ui {
 
-class Control;
+class Window;
 
 class UIEvent {
  public:
-  UIEvent(Control* control = nullptr) : control_(control) {}
+  explicit UIEvent(Window* target = nullptr) : target_(target) {}
   virtual ~UIEvent() = default;
 
-  Control* control() const { return control_; }
+  Window* target() const { return target_; }
 
  private:
-  Control* control_;
+  Window* target_ = nullptr;
+};
+
+class FileDropEvent : public UIEvent {
+ public:
+  FileDropEvent(Window* target, wchar_t* filename)
+      : UIEvent(target), filename_(filename) {}
+  ~FileDropEvent() override = default;
+
+  wchar_t* filename() const { return filename_; }
+
+ private:
+  wchar_t* filename_ = nullptr;
 };
 
 class KeyEvent : public UIEvent {
  public:
-  KeyEvent(Control* control, int key_code)
-      : UIEvent(control), handled_(false), key_code_(key_code) {}
+  KeyEvent(Window* target, int key_code, int repeat_count, bool prev_state,
+           bool modifier_shift_pressed, bool modifier_ctrl_pressed,
+           bool modifier_alt_pressed, bool modifier_super_pressed)
+      : UIEvent(target),
+        key_code_(key_code),
+        repeat_count_(repeat_count),
+        prev_state_(prev_state),
+        modifier_shift_pressed_(modifier_shift_pressed),
+        modifier_ctrl_pressed_(modifier_ctrl_pressed),
+        modifier_alt_pressed_(modifier_alt_pressed),
+        modifier_super_pressed_(modifier_super_pressed) {}
   ~KeyEvent() override = default;
 
   bool is_handled() const { return handled_; }
@@ -37,9 +58,25 @@ class KeyEvent : public UIEvent {
 
   int key_code() const { return key_code_; }
 
+  int repeat_count() const { return repeat_count_; }
+  bool prev_state() const { return prev_state_; }
+
+  bool is_shift_pressed() const { return modifier_shift_pressed_; }
+  bool is_ctrl_pressed() const { return modifier_ctrl_pressed_; }
+  bool is_alt_pressed() const { return modifier_alt_pressed_; }
+  bool is_super_pressed() const { return modifier_super_pressed_; }
+
  private:
-  bool handled_;
-  int key_code_;
+  bool handled_ = false;
+  int key_code_ = 0;
+
+  int repeat_count_ = 0;
+  bool prev_state_ = false;  // Key previously down(true) or up(false)
+
+  bool modifier_shift_pressed_ = false;
+  bool modifier_ctrl_pressed_ = false;
+  bool modifier_alt_pressed_ = false;
+  bool modifier_super_pressed_ = false;
 };
 
 class MouseEvent : public UIEvent {
@@ -54,15 +91,9 @@ class MouseEvent : public UIEvent {
   };
 
  public:
-  MouseEvent(Control* control, Button button, int32_t x, int32_t y,
+  MouseEvent(Window* target, Button button, int32_t x, int32_t y,
              int32_t dx = 0, int32_t dy = 0)
-      : UIEvent(control),
-        handled_(false),
-        button_(button),
-        x_(x),
-        y_(y),
-        dx_(dx),
-        dy_(dy) {}
+      : UIEvent(target), button_(button), x_(x), y_(y), dx_(dx), dy_(dy) {}
   ~MouseEvent() override = default;
 
   bool is_handled() const { return handled_; }
@@ -75,12 +106,12 @@ class MouseEvent : public UIEvent {
   int32_t dy() const { return dy_; }
 
  private:
-  bool handled_;
+  bool handled_ = false;
   Button button_;
-  int32_t x_;
-  int32_t y_;
-  int32_t dx_;
-  int32_t dy_;
+  int32_t x_ = 0;
+  int32_t y_ = 0;
+  int32_t dx_ = 0;
+  int32_t dy_ = 0;
 };
 
 }  // namespace ui

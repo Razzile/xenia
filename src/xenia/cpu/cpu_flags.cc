@@ -16,14 +16,6 @@ DEFINE_string(
     "Loads a .map for symbol names and to diff with the generated symbol "
     "database.");
 
-#if 0 && DEBUG
-#define DEFAULT_DEBUG_FLAG true
-#else
-#define DEFAULT_DEBUG_FLAG false
-#endif
-
-DEFINE_bool(debug, DEFAULT_DEBUG_FLAG,
-            "Allow debugging and retain debug information.");
 DEFINE_bool(disassemble_functions, false,
             "Disassemble functions during generation.");
 
@@ -36,6 +28,10 @@ DEFINE_bool(trace_function_references, false,
 DEFINE_bool(trace_function_data, false,
             "Generate tracing for function result data.");
 
+DEFINE_bool(
+    disable_global_lock, false,
+    "Disables global lock usage in guest code. Does not affect host code.");
+
 DEFINE_bool(validate_hir, false,
             "Perform validation checks on the HIR during compilation.");
 
@@ -44,6 +40,7 @@ DEFINE_uint64(break_on_instruction, 0,
               "int3 before the given guest address is executed.");
 DEFINE_int32(break_condition_gpr, -1, "GPR compared to");
 DEFINE_uint64(break_condition_value, 0, "value compared against");
+DEFINE_string(break_condition_op, "eq", "comparison operator");
 DEFINE_bool(break_condition_truncate, true, "truncate value to 32-bits");
 
 DEFINE_bool(break_on_debugbreak, true, "int3 on JITed __debugbreak requests.");

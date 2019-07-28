@@ -214,6 +214,12 @@ DEFINE_OPCODE(
     0)
 
 DEFINE_OPCODE(
+    OPCODE_CONTEXT_BARRIER,
+    "context_barrier",
+    OPCODE_SIG_X,
+    0)
+
+DEFINE_OPCODE(
     OPCODE_LOAD_MMIO,
     "load_mmio",
     OPCODE_SIG_V_O_O,
@@ -223,6 +229,18 @@ DEFINE_OPCODE(
     OPCODE_STORE_MMIO,
     "store_mmio",
     OPCODE_SIG_X_O_O_V,
+    OPCODE_FLAG_MEMORY)
+
+DEFINE_OPCODE(
+    OPCODE_LOAD_OFFSET,
+    "load_offset",
+    OPCODE_SIG_V_V_V,
+    OPCODE_FLAG_MEMORY)
+
+DEFINE_OPCODE(
+    OPCODE_STORE_OFFSET,
+    "store_offset",
+    OPCODE_SIG_X_V_V_V,
     OPCODE_FLAG_MEMORY)
 
 DEFINE_OPCODE(
@@ -241,13 +259,19 @@ DEFINE_OPCODE(
     OPCODE_MEMSET,
     "memset",
     OPCODE_SIG_X_V_V_V,
-    0)
+    OPCODE_FLAG_MEMORY)
 
 DEFINE_OPCODE(
     OPCODE_PREFETCH,
     "prefetch",
     OPCODE_SIG_X_V_O,
-    0)
+    OPCODE_FLAG_MEMORY)
+
+DEFINE_OPCODE(
+    OPCODE_MEMORY_BARRIER,
+    "memory_barrier",
+    OPCODE_SIG_X,
+    OPCODE_FLAG_MEMORY | OPCODE_FLAG_VOLATILE)
 
 DEFINE_OPCODE(
     OPCODE_MAX,
@@ -288,6 +312,12 @@ DEFINE_OPCODE(
 DEFINE_OPCODE(
     OPCODE_IS_FALSE,
     "is_false",
+    OPCODE_SIG_V_V,
+    0)
+
+DEFINE_OPCODE(
+    OPCODE_IS_NAN,
+    "is_nan",
     OPCODE_SIG_V_V,
     0)
 
@@ -459,6 +489,12 @@ DEFINE_OPCODE(
     0)
 
 DEFINE_OPCODE(
+    OPCODE_RECIP,
+    "recip",
+    OPCODE_SIG_V_V,
+    0)
+
+DEFINE_OPCODE(
     OPCODE_POW2,
     "pow2",
     OPCODE_SIG_V_V,
@@ -619,3 +655,15 @@ DEFINE_OPCODE(
     "atomic_exchange",
     OPCODE_SIG_V_V_V,
     OPCODE_FLAG_VOLATILE)
+
+DEFINE_OPCODE(
+    OPCODE_ATOMIC_COMPARE_EXCHANGE,
+    "atomic_compare_exchange",
+    OPCODE_SIG_V_V_V_V,
+    OPCODE_FLAG_VOLATILE)
+
+DEFINE_OPCODE(
+    OPCODE_SET_ROUNDING_MODE,
+    "set_rounding_mode",
+    OPCODE_SIG_X_V,
+    0)

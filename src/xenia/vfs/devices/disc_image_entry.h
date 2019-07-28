@@ -10,6 +10,7 @@
 #ifndef XENIA_VFS_DEVICES_DISC_IMAGE_ENTRY_H_
 #define XENIA_VFS_DEVICES_DISC_IMAGE_ENTRY_H_
 
+#include <string>
 #include <vector>
 
 #include "xenia/base/filesystem.h"
@@ -27,12 +28,15 @@ class DiscImageEntry : public Entry {
                  MappedMemory* mmap);
   ~DiscImageEntry() override;
 
+  static std::unique_ptr<DiscImageEntry> Create(Device* device, Entry* parent,
+                                                std::string name,
+                                                MappedMemory* mmap);
+
   MappedMemory* mmap() const { return mmap_; }
   size_t data_offset() const { return data_offset_; }
   size_t data_size() const { return data_size_; }
 
-  X_STATUS Open(KernelState* kernel_state, uint32_t desired_access,
-                object_ref<XFile>* out_file) override;
+  X_STATUS Open(uint32_t desired_access, File** out_file) override;
 
   bool can_map() const override { return true; }
   std::unique_ptr<MappedMemory> OpenMapped(MappedMemory::Mode mode,

@@ -26,11 +26,18 @@ DiscImageEntry::DiscImageEntry(Device* device, Entry* parent, std::string path,
 
 DiscImageEntry::~DiscImageEntry() = default;
 
-X_STATUS DiscImageEntry::Open(KernelState* kernel_state,
-                              uint32_t desired_access,
-                              object_ref<XFile>* out_file) {
-  *out_file =
-      object_ref<XFile>(new DiscImageFile(kernel_state, desired_access, this));
+std::unique_ptr<DiscImageEntry> DiscImageEntry::Create(Device* device,
+                                                       Entry* parent,
+                                                       std::string name,
+                                                       MappedMemory* mmap) {
+  auto path = xe::join_paths(parent->path(), name);
+  auto entry = std::make_unique<DiscImageEntry>(device, parent, path, mmap);
+
+  return std::move(entry);
+}
+
+X_STATUS DiscImageEntry::Open(uint32_t desired_access, File** out_file) {
+  *out_file = new DiscImageFile(desired_access, this);
   return X_STATUS_SUCCESS;
 }
 
