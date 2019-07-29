@@ -16,7 +16,6 @@
 #include "xenia/base/delegate.h"
 #include "xenia/base/exception_handler.h"
 #include "xenia/kernel/kernel_state.h"
-#include "xenia/kernel/util/xdbf_utils.h"
 #include "xenia/memory.h"
 #include "xenia/vfs/virtual_file_system.h"
 #include "xenia/xbox.h"
@@ -67,6 +66,9 @@ class Emulator {
   // Are we currently running a title?
   bool is_title_open() const { return title_id_ != 0; }
 
+  // Window used for displaying graphical output.
+  ui::Window* display_window() const { return display_window_; }
+
   // Guest memory system modelling the RAM (both virtual and physical) of the
   // system.
   Memory* memory() const { return memory_.get(); }
@@ -97,28 +99,18 @@ class Emulator {
   // This is effectively the guest operating system.
   kernel::KernelState* kernel_state() const { return kernel_state_.get(); }
 
-  // Get the database with information about the running game.
-  const kernel::util::XdbfGameData* game_data() const {
-    if (title_data_.is_valid()) {
-      return &title_data_;
-    }
-
-    return nullptr;
-  }
-
   // Initializes the emulator and configures all components.
   // The given window is used for display and the provided functions are used
   // to create subsystems as required.
   // Once this function returns a game can be launched using one of the Launch
   // functions.
   X_STATUS Setup(
-      std::function<std::unique_ptr<apu::AudioSystem>(cpu::Processor*,
-                                                      kernel::KernelState*)>
+      ui::Window* display_window,
+      std::function<std::unique_ptr<apu::AudioSystem>(cpu::Processor*)>
           audio_system_factory,
-      std::function<std::unique_ptr<gpu::GraphicsSystem>(cpu::Processor*,
-                                                         kernel::KernelState*)>
+      std::function<std::unique_ptr<gpu::GraphicsSystem>()>
           graphics_system_factory,
-      std::function<std::vector<std::unique_ptr<hid::InputDriver>>()>
+      std::function<std::vector<std::unique_ptr<hid::InputDriver>>(ui::Window*)>
           input_driver_factory);
 
   // Terminates the currently running title.
@@ -170,6 +162,8 @@ class Emulator {
 
   std::wstring game_title_;
 
+  ui::Window* display_window_;
+
   std::unique_ptr<Memory> memory_;
 
   std::unique_ptr<cpu::Processor> processor_;
@@ -181,12 +175,11 @@ class Emulator {
   std::unique_ptr<vfs::VirtualFileSystem> file_system_;
 
   std::unique_ptr<kernel::KernelState> kernel_state_;
-  threading::Thread* main_thread_ = nullptr;
-  kernel::util::XdbfGameData title_data_;  // Currently running title DB
-  uint32_t title_id_ = 0;                  // Currently running title ID
+  threading::Thread* main_thread_;
+  uint32_t title_id_;  // Currently running title ID
 
-  bool paused_ = false;
-  bool restoring_ = false;
+  bool paused_;
+  bool restoring_;
   threading::Fence restore_fence_;  // Fired on restore finish.
 };
 

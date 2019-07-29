@@ -9,14 +9,13 @@
 
 #include "xenia/emulator.h"
 
+#include <gflags/gflags.h>
 #include <cinttypes>
 
-#include "config.h"
 #include "xenia/apu/audio_system.h"
 #include "xenia/base/assert.h"
 #include "xenia/base/byte_stream.h"
 #include "xenia/base/clock.h"
-#include "xenia/base/cvar.h"
 #include "xenia/base/debugging.h"
 #include "xenia/base/exception_handler.h"
 #include "xenia/base/logging.h"
@@ -45,16 +44,30 @@
 #include "xenia/vfs/virtual_file_system.h"
 
 DEFINE_double(time_scalar, 1.0,
-              "Scalar used to speed or slow time (1x, 2x, 1/2x, etc).",
-              "General");
+              "Scalar used to speed or slow time (1x, 2x, 1/2x, etc).");
 
 namespace xe {
 
 Emulator::Emulator(const std::wstring& command_line,
                    const std::wstring& content_root)
-    : command_line_(command_line),
+    : on_launch(),
+      on_exit(),
+      command_line_(command_line),
       content_root_(content_root),
-      title_data_(nullptr, 0) {}
+      game_title_(),
+      display_window_(nullptr),
+      memory_(),
+      audio_system_(),
+      graphics_system_(),
+      input_system_(),
+      export_resolver_(),
+      file_system_(),
+      kernel_state_(),
+      main_thread_(nullptr),
+      title_id_(0),
+      paused_(false),
+      restoring_(false),
+      restore_fence_() {}
 
 Emulator::~Emulator() {
   // Note that we delete things in the reverse order they were initialized.
@@ -82,15 +95,16 @@ Emulator::~Emulator() {
 }
 
 X_STATUS Emulator::Setup(
-    std::function<std::unique_ptr<apu::AudioSystem>(cpu::Processor*,
-                                                    kernel::KernelState*)>
+    ui::Window* display_window,
+    std::function<std::unique_ptr<apu::AudioSystem>(cpu::Processor*)>
         audio_system_factory,
-    std::function<std::unique_ptr<gpu::GraphicsSystem>(cpu::Processor*,
-                                                       kernel::KernelState*)>
+    std::function<std::unique_ptr<gpu::GraphicsSystem>()>
         graphics_system_factory,
-    std::function<std::vector<std::unique_ptr<hid::InputDriver>>()>
+    std::function<std::vector<std::unique_ptr<hid::InputDriver>>(ui::Window*)>
         input_driver_factory) {
   X_STATUS result = X_STATUS_UNSUCCESSFUL;
+
+  display_window_ = display_window;
 
   // Initialize clock.
   // 360 uses a 50MHz clock.
@@ -98,7 +112,7 @@ X_STATUS Emulator::Setup(
   // We could reset this with save state data/constant value to help replays.
   Clock::set_guest_system_time_base(Clock::QueryHostSystemTime());
   // This can be adjusted dynamically, as well.
-  Clock::set_guest_time_scalar(cvars::time_scalar);
+  Clock::set_guest_time_scalar(FLAGS_time_scalar);
 
   // Before we can set thread affinity we must enable the process to use all
   // logical processors.
@@ -116,11 +130,11 @@ X_STATUS Emulator::Setup(
   std::unique_ptr<xe::cpu::backend::Backend> backend;
   if (!backend) {
 #if defined(XENIA_HAS_X64_BACKEND) && XENIA_HAS_X64_BACKEND
-    if (cvars::cpu == "x64") {
+    if (FLAGS_cpu == "x64") {
       backend.reset(new xe::cpu::backend::x64::X64Backend());
     }
 #endif  // XENIA_HAS_X64_BACKEND
-    if (cvars::cpu == "any") {
+    if (FLAGS_cpu == "any") {
 #if defined(XENIA_HAS_X64_BACKEND) && XENIA_HAS_X64_BACKEND
       if (!backend) {
         backend.reset(new xe::cpu::backend::x64::X64Backend());
@@ -136,34 +150,27 @@ X_STATUS Emulator::Setup(
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  // Bring up the virtual filesystem used by the kernel.
-  file_system_ = std::make_unique<xe::vfs::VirtualFileSystem>();
-
-  // Shared kernel state.
-  kernel_state_ = std::make_unique<xe::kernel::KernelState>(this);
-
   // Initialize the APU.
   if (audio_system_factory) {
-    audio_system_ = audio_system_factory(processor_.get(), kernel_state_.get());
+    audio_system_ = audio_system_factory(processor_.get());
     if (!audio_system_) {
-      return X_STATUS_UNSUCCESSFUL;
+      return X_STATUS_NOT_IMPLEMENTED;
     }
   }
 
   // Initialize the GPU.
-  graphics_system_ =
-      graphics_system_factory(processor_.get(), kernel_state_.get());
+  graphics_system_ = graphics_system_factory();
   if (!graphics_system_) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_STATUS_NOT_IMPLEMENTED;
   }
 
-  // Initialize all HID drivers.
-  input_system_ = std::make_unique<xe::hid::InputSystem>();
+  // Initialize the HID.
+  input_system_ = std::make_unique<xe::hid::InputSystem>(display_window_);
   if (!input_system_) {
     return X_STATUS_NOT_IMPLEMENTED;
   }
   if (input_driver_factory) {
-    auto input_drivers = input_driver_factory();
+    auto input_drivers = input_driver_factory(display_window_);
     for (size_t i = 0; i < input_drivers.size(); ++i) {
       input_system_->AddDriver(std::move(input_drivers[i]));
     }
@@ -174,6 +181,26 @@ X_STATUS Emulator::Setup(
     return result;
   }
 
+  // Bring up the virtual filesystem used by the kernel.
+  file_system_ = std::make_unique<xe::vfs::VirtualFileSystem>();
+
+  // Shared kernel state.
+  kernel_state_ = std::make_unique<xe::kernel::KernelState>(this);
+
+  // Setup the core components.
+  result = graphics_system_->Setup(processor_.get(), kernel_state_.get(),
+                                   display_window_);
+  if (result) {
+    return result;
+  }
+
+  if (audio_system_) {
+    result = audio_system_->Setup(kernel_state_.get());
+    if (result) {
+      return result;
+    }
+  }
+
   // HLE kernel modules.
   kernel_state_->LoadKernelModule<kernel::xboxkrnl::XboxkrnlModule>();
   kernel_state_->LoadKernelModule<kernel::xam::XamModule>();
@@ -181,6 +208,14 @@ X_STATUS Emulator::Setup(
 
   // Initialize emulator fallback exception handling last.
   ExceptionHandler::Install(Emulator::ExceptionCallbackThunk, this);
+
+  if (display_window_) {
+    // Finish initializing the display.
+    display_window_->loop()->PostSynchronous([this]() {
+      xe::ui::GraphicsContextLock context_lock(display_window_->context());
+      Profiler::set_window(display_window_);
+    });
+  }
 
   return result;
 }
@@ -519,6 +554,16 @@ bool Emulator::ExceptionCallback(Exception* ex) {
            context->v[i].i32[1], context->v[i].i32[2], context->v[i].i32[3]);
   }
 
+  // Display a dialog telling the user the guest has crashed.
+  display_window()->loop()->PostSynchronous([&]() {
+    xe::ui::ImGuiDialog::ShowMessageBox(
+        display_window(), "Uh-oh!",
+        "The guest has crashed.\n\n"
+        ""
+        "Xenia has now paused itself.\n"
+        "A crash dump has been written into the log.");
+  });
+
   // Now suspend ourself (we should be a guest thread).
   current_thread->Suspend(nullptr);
 
@@ -598,15 +643,18 @@ X_STATUS Emulator::CompleteLaunch(const std::wstring& path,
   if (module->title_id()) {
     char title_id[9] = {0};
     std::snprintf(title_id, xe::countof(title_id), "%08X", module->title_id());
-    config::LoadGameConfig(xe::to_wstring(title_id));
     uint32_t resource_data = 0;
     uint32_t resource_size = 0;
     if (XSUCCEEDED(
             module->GetSection(title_id, &resource_data, &resource_size))) {
-      title_data_ = kernel::util::XdbfGameData(
+      kernel::util::XdbfGameData db(
           module->memory()->TranslateVirtual(resource_data), resource_size);
-      if (title_data_.is_valid()) {
-        game_title_ = xe::to_wstring(title_data_.title());
+      if (db.is_valid()) {
+        game_title_ = xe::to_wstring(db.title());
+        auto icon_block = db.icon();
+        if (icon_block) {
+          display_window_->SetIcon(icon_block.buffer, icon_block.size);
+        }
       }
     }
   }
