@@ -34,5 +34,6 @@
         <file>resources/themes/Xenia/stylesheets/XComboBox.css</file>
         <file>resources/themes/Xenia/stylesheets/XTextEdit.css</file>
         <file>resources/themes/Xenia/stylesheets/XLineEdit.css</file>
+        <file>resources/themes/Xenia/stylesheets/SettingsTab.css</file>
     </qresource>
 </RCC>

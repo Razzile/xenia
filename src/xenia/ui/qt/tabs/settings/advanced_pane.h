@@ -1,0 +1,20 @@
+#ifndef XENIA_UI_QT_ADVANCED_PANE_H_
+#define XENIA_UI_QT_ADVANCED_PANE_H_
+
+#include "settings_pane.h"
+
+namespace xe {
+namespace ui {
+namespace qt {
+
+class AdvancedPane : public SettingsPane {
+  Q_OBJECT
+ public:
+  explicit AdvancedPane() : SettingsPane(0xE7BA, "Advanced") {}
+};
+
+}  // namespace qt
+}  // namespace ui
+}  // namespace xe
+
+#endif

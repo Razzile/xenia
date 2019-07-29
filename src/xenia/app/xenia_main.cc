@@ -40,6 +40,11 @@ int xenia_main(const std::vector<std::wstring>& args) {
   Profiler::ThreadEnter("main");*/
 
   // auto emulator = std::make_unique<xe::Emulator>(L"");
+
+#ifdef DEBUG
+  qputenv("QT_SCALE_FACTOR", "0.75");
+#endif
+
   XGameLibrary* lib = XGameLibrary::Instance();
   lib->add_path(xe::to_wstring(cvars::library_path));
   lib->scan_paths();

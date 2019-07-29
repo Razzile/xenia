@@ -5,6 +5,7 @@
 #include "xenia/ui/qt/tabs/debug_tab.h"
 #include "xenia/ui/qt/tabs/home_tab.h"
 #include "xenia/ui/qt/tabs/library_tab.h"
+#include "xenia/ui/qt/tabs/settings_tab.h"
 #include "xenia/ui/qt/widgets/tab.h"
 
 DECLARE_bool(show_debug_tab);
@@ -45,10 +46,9 @@ void XNav::BuildTabs() {
   // and keep widgets/ for reusable components
   std::vector<XTab*> tabs;
   if (cvars::show_debug_tab) {
-    tabs = {new HomeTab(), new LibraryTab(), new XTab("Settings"),
-            new DebugTab()};
+    tabs = {new HomeTab(), new LibraryTab(), new SettingsTab(), new DebugTab()};
   } else {
-    tabs = {new HomeTab(), new LibraryTab(), new XTab("Settings")};
+    tabs = {new HomeTab(), new LibraryTab(), new SettingsTab()};
   }
 
   tab_selector_ = new XTabSelector(tabs);

@@ -1,0 +1,20 @@
+#ifndef XENIA_UI_QT_CPU_PANE_H_
+#define XENIA_UI_QT_CPU_PANE_H_
+
+#include "settings_pane.h"
+
+namespace xe {
+namespace ui {
+namespace qt {
+
+class CPUPane : public SettingsPane {
+  Q_OBJECT
+ public:
+  explicit CPUPane() : SettingsPane(0xEC4A, "CPU") {}
+};
+
+}  // namespace qt
+}  // namespace ui
+}  // namespace xe
+
+#endif
