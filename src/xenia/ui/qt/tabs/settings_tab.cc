@@ -32,6 +32,13 @@ void SettingsTab::Build() {
   layout_->setSpacing(0);
   setLayout(layout_);
 
+  content_widget_ = new QStackedWidget();
+
+  for (SettingsPane* pane : settings_panes_) {
+    pane->Build();
+    content_widget_->addWidget(pane->widget());
+  }
+
   BuildSidebar();
 
   QScrollArea* scroll_area = new QScrollArea(this);
@@ -112,8 +119,8 @@ void SettingsTab::BuildSidebar() {
     }
 
     // link up the clicked signal
-    /*connect(btn, &XSideBarButton::clicked,
-            [&]() { content_widget_->setCurrentWidget(item.widget); });*/
+    connect(btn, &XSideBarButton::clicked,
+            [=]() { content_widget_->setCurrentIndex(counter); });
   }
 
   sidebar_layout->addWidget(sidebar_, 0, Qt::AlignHCenter | Qt::AlignTop);

@@ -11,6 +11,8 @@ class GPUPane : public SettingsPane {
   Q_OBJECT
  public:
   explicit GPUPane() : SettingsPane(0xE7F4, "GPU") {}
+
+  void Build() override;
 };
 
 }  // namespace qt

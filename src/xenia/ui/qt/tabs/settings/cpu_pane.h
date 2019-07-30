@@ -11,6 +11,8 @@ class CPUPane : public SettingsPane {
   Q_OBJECT
  public:
   explicit CPUPane() : SettingsPane(0xEC4A, "CPU") {}
+
+  void Build() override;
 };
 
 }  // namespace qt

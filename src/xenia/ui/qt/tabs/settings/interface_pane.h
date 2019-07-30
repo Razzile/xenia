@@ -11,6 +11,8 @@ class InterfacePane : public SettingsPane {
   Q_OBJECT
  public:
   explicit InterfacePane() : SettingsPane(0xE790, "Interface") {}
+
+  void Build() override;
 };
 
 }  // namespace qt

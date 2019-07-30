@@ -15,18 +15,21 @@ class SettingsPane : public Themeable<QWidget> {
                         QWidget* parent = nullptr)
       : Themeable<QWidget>("SettingsPane", parent),
         glyph_(glyph),
-        title_(title) {
-    // Build();
-  }
+        title_(title) {}
 
   virtual ~SettingsPane() = default;
 
   QChar glyph() const { return glyph_; }
   const QString& title() const { return title_; }
 
- private:
-  // virtual void Build() = 0;
+  QWidget* widget() const { return widget_; }
 
+  virtual void Build() = 0;
+
+ protected:
+  QWidget* widget_ = nullptr;
+
+ private:
   QChar glyph_;
   QString title_;
 };

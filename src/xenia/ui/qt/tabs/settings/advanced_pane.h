@@ -11,6 +11,8 @@ class AdvancedPane : public SettingsPane {
   Q_OBJECT
  public:
   explicit AdvancedPane() : SettingsPane(0xE7BA, "Advanced") {}
+
+  void Build() override;
 };
 
 }  // namespace qt
