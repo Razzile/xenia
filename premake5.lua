@@ -68,6 +68,11 @@ filter({"configurations:Debug", "platforms:Windows"})
     "/NODEFAULTLIB:MSVCRTD",
   })
 
+filter({"configurations:Debug", "platforms:Linux"})
+  buildoptions({
+    "-g",
+  })
+
 filter("configurations:Release")
   runtime("Release")
   defines({
@@ -133,16 +138,17 @@ filter({"platforms:Linux", "toolset:gcc"})
   end
 
 filter({"platforms:Linux", "language:C++", "toolset:clang"})
-  buildoptions({
-    "-std=c++14",
-    "-stdlib=libstdc++",
-  })
   links({
     "c++",
     "c++abi"
   })
   disablewarnings({
     "deprecated-register"
+  })
+filter({"platforms:Linux", "language:C++", "toolset:clang", "files:*.cc or *.cpp"})
+  buildoptions({
+    "-std=c++14",
+    "-stdlib=libstdc++",
   })
 
 filter("platforms:Windows")
@@ -179,13 +185,11 @@ filter("platforms:Windows")
     "wsock32",
     "ws2_32",
     "xinput",
-    "xaudio2",
     "glu32",
     "opengl32",
     "comctl32",
     "shcore",
     "shlwapi",
-    "dxguid",
   })
 
 -- Create scratch/ path and dummy flags file if needed.
@@ -207,9 +211,6 @@ if not os.isdir("scratch") then
   flags_file:write("#--flush_stdout=false\n")
   flags_file:write("\n")
   flags_file:write("#--vsync=false\n")
-  flags_file:write("#--gl_debug\n")
-  flags_file:write("#--gl_debug_output\n")
-  flags_file:write("#--gl_debug_output_synchronous\n")
   flags_file:write("#--trace_gpu_prefix=scratch/gpu/gpu_trace_\n")
   flags_file:write("#--trace_gpu_stream\n")
   flags_file:write("#--disable_framebuffer_readback\n")
@@ -225,25 +226,19 @@ solution("xenia")
     platforms({"Linux"})
   elseif os.istarget("windows") then
     platforms({"Windows"})
-    -- Minimum version to support ID3D12GraphicsCommandList1 (for
-    -- SetSamplePositions).
-    filter("action:vs2017")
-      systemversion("10.0.15063.0")
-    filter("action:vs2019")
-      systemversion("10.0")
-    filter({})
   end
   configurations({"Checked", "Debug", "Release"})
 
   -- Include third party files first so they don't have to deal with gflags.
   include("third_party/aes_128.lua")
   include("third_party/capstone.lua")
-  include("third_party/dxbc.lua")
+  include("third_party/discord-rpc.lua")
   include("third_party/gflags.lua")
   include("third_party/glew.lua")
   include("third_party/glslang-spirv.lua")
   include("third_party/imgui.lua")
   include("third_party/libav.lua")
+  include("third_party/mspack.lua")
   include("third_party/snappy.lua")
   include("third_party/spirv-tools.lua")
   include("third_party/volk.lua")
@@ -252,6 +247,7 @@ solution("xenia")
 
   include("src/xenia")
   include("src/xenia/app")
+  include("src/xenia/app/discord")
   include("src/xenia/apu")
   include("src/xenia/apu/nop")
   include("src/xenia/base")
@@ -271,8 +267,6 @@ solution("xenia")
 
   if os.istarget("windows") then
     include("src/xenia/apu/xaudio2")
-    include("src/xenia/gpu/d3d12")
     include("src/xenia/hid/winkey")
     include("src/xenia/hid/xinput")
-    include("src/xenia/ui/d3d12")
   end
