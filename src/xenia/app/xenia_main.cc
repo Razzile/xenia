@@ -30,6 +30,9 @@
 // Available graphics systems:
 #include "xenia/gpu/null/null_graphics_system.h"
 #include "xenia/gpu/vulkan/vulkan_graphics_system.h"
+#if XE_PLATFORM_WIN32
+#include "xenia/gpu/d3d12/d3d12_graphics_system.h"
+#endif  // XE_PLATFORM_WIN32
 
 // Available input drivers:
 #include "xenia/hid/nop/nop_hid.h"
@@ -89,6 +92,11 @@ std::unique_ptr<gpu::GraphicsSystem> CreateGraphicsSystem() {
   if (cvars::gpu.compare("vulkan") == 0) {
     return std::unique_ptr<gpu::GraphicsSystem>(
         new xe::gpu::vulkan::VulkanGraphicsSystem());
+#if XE_PLATFORM_WIN32
+  } else if (cvars::gpu.compare("d3d12") == 0) {
+    return std::unique_ptr<gpu::GraphicsSystem>(
+        new xe::gpu::d3d12::D3D12GraphicsSystem());
+#endif  // XE_PLATFORM_WIN32
   } else if (cvars::gpu.compare("null") == 0) {
     return std::unique_ptr<gpu::GraphicsSystem>(
         new xe::gpu::null::NullGraphicsSystem());
@@ -96,6 +104,15 @@ std::unique_ptr<gpu::GraphicsSystem> CreateGraphicsSystem() {
     // Create best available.
     std::unique_ptr<gpu::GraphicsSystem> best;
 
+#if XE_PLATFORM_WIN32
+    if (xe::gpu::d3d12::D3D12GraphicsSystem::IsD3D12APIAvailable()) {
+      best = std::unique_ptr<gpu::GraphicsSystem>(
+          new xe::gpu::d3d12::D3D12GraphicsSystem());
+      if (best) {
+        return best;
+      }
+    }
+#endif  // XE_PLATFORM_WIN32
     best = std::unique_ptr<gpu::GraphicsSystem>(
         new xe::gpu::vulkan::VulkanGraphicsSystem());
     if (best) {
