@@ -3,6 +3,7 @@
 
 #include "xenia/base/filesystem.h"
 #include "xenia/base/string_util.h"
+#include "xenia/kernel/util/xex2_info.h"
 #include "xenia/vfs/device.h"
 #include "xenia/vfs/devices/disc_image_device.h"
 #include "xenia/vfs/devices/host_path_device.h"
@@ -25,6 +26,77 @@ enum XGameFormat {
   kIso,
   kStfs,
   kXex,
+};
+
+typedef xex2_header XexHeader;
+typedef xex2_opt_header XexOptHeader;
+typedef xex2_game_ratings_t XGameRatings;
+typedef xex2_region_flags XGameRegions;
+typedef xe_xex2_version_t XGameVersion;
+
+struct XexInfo {
+  std::string game_title;
+  uint8_t* icon = nullptr;
+  size_t icon_size;
+
+  uint32_t* alt_title_ids = nullptr;
+  uint32_t alt_title_ids_count;
+  uint32_t base_address;
+  xex2_opt_execution_info execution_info;
+  xex2_opt_file_format_info* file_format_info = nullptr;
+  xex2_game_ratings_t game_ratings;
+  uint32_t header_count;
+  uint32_t header_size;
+  xex2_module_flags module_flags;
+  xex2_multi_disc_media_id_t* multi_disc_media_ids = nullptr;
+  uint32_t multi_disc_media_ids_count;
+  xex2_opt_original_pe_name* original_pe_name = nullptr;
+  xex2_page_descriptor* page_descriptors = nullptr;
+  uint32_t page_descriptors_count;
+  xex2_resource* resources = nullptr;
+  uint32_t resources_count;
+  xex2_security_info security_info;
+  uint32_t security_offset;
+  uint8_t session_key[0x10];
+  xex2_system_flags system_flags;
+
+  ~XexInfo() {
+    delete[] icon;
+    delete[] alt_title_ids;
+    delete file_format_info;
+    delete[] multi_disc_media_ids;
+    delete original_pe_name;
+    delete[] page_descriptors;
+    delete[] resources;
+  }
+};
+
+struct NxeInfo {
+  std::string game_title;
+  uint8_t* icon = nullptr;
+  size_t icon_size;
+  uint8_t* nxe_background_image = nullptr;  // TODO
+  size_t nxe_background_image_size;         // TODO
+  uint8_t* nxe_slot_image = nullptr;        // TODO
+  size_t nxe_slot_image_size;               // TODO
+
+  NxeInfo() = default;
+
+  ~NxeInfo() {
+    delete[] icon;
+    delete[] nxe_background_image;
+    delete[] nxe_slot_image;
+  }
+};
+
+struct GameInfo {
+  XGameFormat format;
+  wstring path;
+  wstring filename;
+  NxeInfo nxe_info;
+  XexInfo xex_info;
+
+  GameInfo() = default;
 };
 
 inline const bool CompareCaseInsensitive(const wstring& left,
@@ -71,16 +143,23 @@ inline const wstring GetParentDirectory(const wstring& path) {
   return path.substr(0, index);
 }
 
-inline uint8_t* Read(File* file, size_t offset = 0, size_t length = 0) {
+inline X_STATUS Read(File* file, void* buffer, size_t offset = 0,
+                     size_t length = 0) {
+  if (!buffer) {
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   if (!length) {
     length = file->entry()->size();
   }
 
-  uint8_t* data = (uint8_t*)calloc(1, length);
   size_t bytes_read;
-  file->ReadSync(data, length, offset, &bytes_read);
+  file->ReadSync(buffer, length, offset, &bytes_read);
 
-  return data;
+  if (length == bytes_read) {
+    return X_STATUS_SUCCESS;
+  }
+  return X_STATUS_UNSUCCESSFUL;
 }
 
 inline std::string ReadFileMagic(const wstring& path, size_t length = 4) {
@@ -137,10 +216,10 @@ inline Device* CreateDevice(const wstring& path) {
 
 template <typename T>
 inline T Read(File* file, size_t offset) {
-  uint8_t* data = Read(file, offset, sizeof(T));
+  uint8_t data[sizeof(T)];
+  Read(file, data, offset, sizeof(T));
   T swapped = xe::load_and_swap<T>(data);
 
-  delete[] data;
   return swapped;
 }
 

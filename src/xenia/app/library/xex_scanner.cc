@@ -60,14 +60,25 @@ X_STATUS ReadXexImageUncompressed(File* file, XexInfo* info, size_t offset,
 
   const size_t exe_size = file_size - info->header_size;
 
+  X_STATUS status;
   switch (format->encryption_type) {
     case XEX_ENCRYPTION_NONE: {
-      out_data = Read(file, info->header_size + offset, length);
+      status = Read(file, out_data, info->header_size + offset, length);
+      if (status != X_STATUS_SUCCESS) {
+        XELOGE("Could not read from file %ls", file->entry()->path().c_str());
+        return status;
+      }
+
       XELOGI("Successfully read unencrypted uncompressed image.");
       return X_STATUS_SUCCESS;
     }
     case XEX_ENCRYPTION_NORMAL: {
-      out_data = Read(file, info->header_size + offset, length);
+      status = Read(file, out_data, info->header_size + offset, length);
+      if (status != X_STATUS_SUCCESS) {
+        XELOGE("Could not read from file %ls", file->entry()->path().c_str());
+        return status;
+      }
+
       aes_decrypt_inplace(info->session_key, out_data, length);
       XELOGI("Successfully read encrypted uncompressed image.");
       return X_STATUS_SUCCESS;
@@ -108,7 +119,9 @@ X_STATUS ReadXexImageBasicCompressed(File* file, XexInfo* info, size_t offset,
   auto block = compression->blocks[i];
   uint32_t block_size = block.data_size + 0x10;
   uint32_t block_address = info->header_size + compressed_position - 0x10;
-  uint8_t* data = Read(file, block_address, block_size);
+
+  uint8_t* data = new uint8_t[file->entry()->size()];
+  Read(file, data, block_address, block_size);
 
   if (encryption == XEX_ENCRYPTION_NORMAL) {
     XELOGI("Decrypting basic compressed image.");
@@ -130,14 +143,17 @@ X_STATUS ReadXexImageNormalCompressed(File* file, XexInfo* info, size_t offset,
   auto encryption_type = info->file_format_info->encryption_type;
   auto uncompressed_length = info->security_info.image_size;
   auto compression_info = info->file_format_info->compression_info.normal;
-  
+
   sha1::SHA1 s;
   auto in_length = file->entry()->size() - info->header_size;
-  auto in_buffer = Read(file, info->header_size, in_length);
+
+  uint8_t* in_buffer = new uint8_t[in_length];
+  Read(file, in_buffer, info->header_size, in_length);
+
   if (encryption_type == XEX_ENCRYPTION_NORMAL)
     aes_decrypt_inplace(info->session_key, in_buffer, in_length);
 
-  uint8_t* compressed_buffer = (uint8_t*)calloc(1, in_length);
+  uint8_t* compressed_buffer = new uint8_t[in_length];
 
   uint8_t block_calced_digest[0x14];
   auto current_block = &compression_info.first_block;
@@ -175,9 +191,10 @@ X_STATUS ReadXexImageNormalCompressed(File* file, XexInfo* info, size_t offset,
 
   // Decompress
   auto window_size = compression_info.window_size;
-  auto decompressed_buffer = (uint8_t*)calloc(1, uncompressed_length);
-  lzx_decompress(compressed_buffer, out_cursor - compressed_buffer, decompressed_buffer,
-                 uncompressed_length, window_size, nullptr, 0);
+  auto decompressed_buffer = new uint8_t[uncompressed_length];
+  lzx_decompress(compressed_buffer, out_cursor - compressed_buffer,
+                 decompressed_buffer, uncompressed_length, window_size, nullptr,
+                 0);
 
   out_data = (uint8_t*)malloc(length);
   memcpy(out_data, decompressed_buffer + offset, length);
@@ -209,7 +226,7 @@ inline void ReadXexAltTitleIds(uint8_t* data, XexInfo* info) {
   uint32_t count = (length - 0x04) / 0x04;
 
   info->alt_title_ids_count = count;
-  info->alt_title_ids = (uint32_t*)calloc(length, sizeof(uint32_t));
+  info->alt_title_ids = new uint32_t[length];
 
   uint8_t* cursor = data + 0x04;
   for (uint32_t i = 0; i < length; i++, cursor += 0x04) {
@@ -337,7 +354,8 @@ X_STATUS TryKey(const uint8_t* key, uint8_t* magic_block, XexInfo* info,
   auto aes_key = reinterpret_cast<uint8_t*>(info->security_info.aes_key);
 
   aes_decrypt_buffer(key, aes_key, 0x10, info->session_key, 0x10);
-  aes_decrypt_buffer(info->session_key, magic_block, 0x10, decrypted_block, 0x10);
+  aes_decrypt_buffer(info->session_key, magic_block, 0x10, decrypted_block,
+                     0x10);
   memcpy(info->session_key, info->session_key, 0x10);
 
   // Decompress if the XEX is lzx compressed
@@ -357,14 +375,14 @@ X_STATUS TryKey(const uint8_t* key, uint8_t* magic_block, XexInfo* info,
 
 X_STATUS ReadSessionKey(File* file, XexInfo* info) {
   const uint16_t PE_MAGIC = 0x4D5A;
-  uint8_t* magic_block = Read(file, info->header_size, 0x10);
+  uint8_t magic_block[0x10];
+  Read(file, magic_block, info->header_size, 0x10);
 
   // Check if the XEX is already decrypted.
   // If decrypted with a third party tool like xextool, the encryption flag
   // is not changed, but the data is decrypted.
   uint16_t found_magic = xe::load_and_swap<uint16_t>(magic_block);
   if (found_magic == PE_MAGIC) {
-    delete[] magic_block;
     info->file_format_info->encryption_type = XEX_ENCRYPTION_NONE;
     return X_STATUS_SUCCESS;
   }
@@ -372,20 +390,18 @@ X_STATUS ReadSessionKey(File* file, XexInfo* info) {
   // XEX is encrypted, derive the session key.
   if (XFAILED(TryKey(xex2_retail_key, magic_block, info, file)))
     if (XFAILED(TryKey(xex2_devkit_key, magic_block, info, file))) {
-      delete[] magic_block;
       return X_STATUS_SUCCESS;
     }
 
-  delete[] magic_block;
   return X_STATUS_SUCCESS;
 }
 
 X_STATUS ReadXexHeaderSecurityInfo(File* file, XexInfo* info) {
-  uint32_t length = 0x180;
-  uint8_t* data = Read(file, info->security_offset, length);
+  const uint32_t length = 0x180;
+  uint8_t data[length];
+  Read(file, data, info->security_offset, length);
 
   memcpy(&info->security_info, data, sizeof(xex2_security_info));
-  delete[] data;
 
   // XEX is still encrypted. Derive the session key.
   if (XFAILED(ReadSessionKey(file, info))) {
@@ -400,13 +416,17 @@ X_STATUS ReadXexHeaderSectionInfo(File* file, XexInfo* info) {
   uint32_t count = Read<uint32_t>(file, offset);
   uint32_t size = sizeof(xex2_page_descriptor);
   uint32_t length = count * size;
-  uint8_t* data = Read(file, offset, length);
+  uint8_t* data = new uint8_t[length];
+
+  Read(file, data, offset, length);
 
   info->page_descriptors_count = count;
   info->page_descriptors = (xex2_page_descriptor*)calloc(count, size);
 
   if (!info->page_descriptors || !count) {
     XELOGE("No xex page descriptors are present");
+
+    delete[] data;
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -426,7 +446,8 @@ X_STATUS ReadXexHeaderSectionInfo(File* file, XexInfo* info) {
 
 X_STATUS ReadXexHeader(File* file, XexInfo* info) {
   uint32_t header_size = Read<uint32_t>(file, 0x8);
-  uint8_t* data = Read(file, 0x0, header_size);
+  uint8_t* data = new uint8_t[header_size];
+  Read(file, data, 0x0, header_size);
 
   // Read Main Header Data
   info->module_flags =
@@ -444,10 +465,12 @@ X_STATUS ReadXexHeader(File* file, XexInfo* info) {
 
   if (XFAILED(ReadXexHeaderSecurityInfo(file, info))) {
     XELOGE("Could not read xex security info");
+    delete[] data;
     return X_STATUS_UNSUCCESSFUL;
   }
   if (XFAILED(ReadXexHeaderSectionInfo(file, info))) {
     XELOGE("Could not read xex section info");
+    delete[] data;
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -476,6 +499,7 @@ X_STATUS ReadXexResources(File* file, XexInfo* info) {
       uint8_t* data;
       if (XFAILED(ReadXexImage(file, info, offset, resource->size, data))) {
         XELOGE("Could not read XBDF resource.");
+        delete[] data;
         return X_STATUS_UNSUCCESSFUL;
       }
 
@@ -508,12 +532,12 @@ X_STATUS ReadXexResources(File* file, XexInfo* info) {
   return X_STATUS_SUCCESS;
 }
 
-X_STATUS XexScanner::ScanXex(File* file, XexInfo* out_info) {
-  if (XFAILED(ReadXexHeader(file, out_info))) {
+X_STATUS XexScanner::ScanXex(File* file, GameInfo* out_info) {
+  if (XFAILED(ReadXexHeader(file, &out_info->xex_info))) {
     XELOGE("ReadXexHeader failed");
     return X_STATUS_UNSUCCESSFUL;
   }
-  if (XFAILED(ReadXexResources(file, out_info))) {
+  if (XFAILED(ReadXexResources(file, &out_info->xex_info))) {
     XELOGE("ReadXexResources failed");
     return X_STATUS_UNSUCCESSFUL;
   }

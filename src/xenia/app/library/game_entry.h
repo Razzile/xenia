@@ -1,23 +1,24 @@
 #ifndef XENIA_APP_GAME_ENTRY_H_
 #define XENIA_APP_GAME_ENTRY_H_
 
-#include "xenia/app/library/game_scanner.h"
-#include "xenia/kernel/util/xex2_info.h"
-
 #include <map>
 #include <vector>
+#include "xenia/app/library/scanner_utils.h"
+#include "xenia/kernel/util/xex2_info.h"
 
 namespace xe {
 namespace app {
 
 class XGameEntry final {
  public:
-  static XGameEntry* from_game_info(GameInfo* info);
-  ~XGameEntry();
+  static XGameEntry* from_game_info(const GameInfo& info);
+
+  explicit XGameEntry();
+  explicit XGameEntry(const XGameEntry& other);
 
   bool is_valid();
   bool is_missing_data();
-  bool apply_info(GameInfo* info);
+  bool apply_info(const GameInfo& info);
 
   const XGameFormat& format() const { return format_; }
   const std::wstring& file_path() const { return file_path_; }
@@ -47,8 +48,6 @@ class XGameEntry final {
   const uint8_t& player_count() const { return player_count_; }
 
  private:
-  explicit XGameEntry(){};
-
   // File Info
   XGameFormat format_;
   std::wstring file_path_;

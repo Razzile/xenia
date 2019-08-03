@@ -3,7 +3,7 @@
 namespace xe {
 namespace app {
 
-XGameEntry* XGameEntry::from_game_info(GameInfo* info) {
+XGameEntry* XGameEntry::from_game_info(const GameInfo& info) {
   auto entry = new XGameEntry();
   auto result = entry->apply_info(info);
 
@@ -11,7 +11,37 @@ XGameEntry* XGameEntry::from_game_info(GameInfo* info) {
   return entry;
 };
 
-XGameEntry::~XGameEntry(){};
+XGameEntry::XGameEntry() {
+  format_ = XGameFormat::kUnknown;
+  ratings_ = xex2_game_ratings_t();
+  version_.value = 0x0;
+  base_version_.value = 0x0;
+  regions_ = XGameRegions::XEX_REGION_ALL;
+}
+
+XGameEntry::XGameEntry(const XGameEntry& other) {
+  format_ = other.format_;
+  file_path_ = other.file_path_;
+  file_name_ = other.file_name_;
+  launch_paths_ = other.launch_paths_;
+  default_launch_paths_ = other.default_launch_paths_;
+  title_ = other.title_;
+  icon_ = other.icon_;
+  icon_size_ = other.icon_size_;
+  title_id_ = other.title_id_;
+  media_id_ = other.media_id_;
+  alt_title_ids_ = other.alt_title_ids_;
+  alt_media_ids_ = other.alt_media_ids_;
+  disc_map_ = other.disc_map_;
+  version_ = other.version_;
+  base_version_ = other.base_version_;
+  ratings_ = other.ratings_;
+  regions_ = other.regions_;
+  build_date_ = other.build_date_;
+  genre_ = other.genre_;
+  release_date_ = other.release_date_;
+  player_count_ = other.player_count_;
+}
 
 bool XGameEntry::is_valid() {
   // Minimum requirements
@@ -26,13 +56,13 @@ bool XGameEntry::is_missing_data() {
   // TODO: Regions
 }
 
-bool XGameEntry::apply_info(GameInfo* info) {
-  auto xex = &info->xex_info;
-  auto nxe = &info->nxe_info;
+bool XGameEntry::apply_info(const GameInfo& info) {
+  auto xex = &info.xex_info;
+  auto nxe = &info.nxe_info;
 
-  format_ = info->format;
-  file_path_ = info->path;
-  file_name_ = info->filename;
+  format_ = info.format;
+  file_path_ = info.path;
+  file_name_ = info.filename;
 
   if (!xex) return false;
 
@@ -47,9 +77,9 @@ bool XGameEntry::apply_info(GameInfo* info) {
   // Add to disc map / launch paths
   auto disc_id = xex->execution_info.disc_number;
   disc_map_.insert_or_assign(disc_id, media_id_);
-  launch_paths_.insert_or_assign(info->path, media_id_);
+  launch_paths_.insert_or_assign(info.path, media_id_);
   if (!default_launch_paths_.count(media_id_)) {
-    default_launch_paths_.insert(std::make_pair(media_id_, info->path));
+    default_launch_paths_.insert(std::make_pair(media_id_, info.path));
   }
 
   if (xex->game_title.length() > 0) {

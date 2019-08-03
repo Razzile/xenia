@@ -1,12 +1,12 @@
 #ifndef XENIA_APP_GAME_LIBRARY_H_
 #define XENIA_APP_GAME_LIBRARY_H_
 
-#include "xenia/app/library/game_entry.h"
-
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+#include "xenia/app/library/game_entry.h"
+#include "xenia/app/library/scanner_utils.h"
 
 namespace xe {
 namespace app {
@@ -22,18 +22,18 @@ class XGameLibrary {
   void scan_paths();
 
   const XGameEntry* game(const uint32_t title_id) const;
-  const std::vector<XGameEntry*> games() const;
-  const size_t size() const;
+  const std::vector<XGameEntry>& games() const { return games_; }
+  const size_t size() const { return games_.size(); }
 
-  void clear();
-  bool load();
-  bool save();
+  void clear() { games_.clear(); }
+
+  // bool load();
+  // bool save();
 
  private:
-  XGameLibrary(){};
+  XGameLibrary() = default;
 
-  std::vector<XGameEntry*> games_;
-  std::map<uint32_t, XGameEntry*> games_map_;
+  std::vector<XGameEntry> games_;
   std::vector<std::wstring> paths_;
 };
 

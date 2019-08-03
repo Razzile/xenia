@@ -8,8 +8,8 @@ namespace xe {
 namespace app {
 using filesystem::FileInfo;
 
-const vector<GameInfo*> XGameScanner::ScanPath(const wstring& path) {
-  vector<GameInfo*> info;
+const vector<XGameEntry> XGameScanner::ScanPath(const wstring& path) {
+  vector<XGameEntry> info;
 
   // Check if the given path exists
   if (!filesystem::PathExists(path)) {
@@ -18,9 +18,9 @@ const vector<GameInfo*> XGameScanner::ScanPath(const wstring& path) {
 
   // Scan if the given path is a file
   if (!filesystem::IsFolder(path)) {
-    GameInfo* game_info = (GameInfo*)calloc(1, sizeof(GameInfo));
-    ScanGame(path, game_info);
-    info.push_back(game_info);
+    XGameEntry game_info;
+    ScanGame(path, &game_info);
+    info.emplace_back(std::move(game_info));
     return info;
   }
 
@@ -38,7 +38,7 @@ const vector<GameInfo*> XGameScanner::ScanPath(const wstring& path) {
     if (current_file.type == FileInfo::Type::kDirectory) {
       vector<FileInfo> directory_files = filesystem::ListFiles(current_path);
       for (FileInfo file : directory_files) {
-        if(CompareCaseInsensitive(file.name, L"$SystemUpdate")) continue;
+        if (CompareCaseInsensitive(file.name, L"$SystemUpdate")) continue;
 
         auto next_path = xe::join_paths(current_path, file.name);
         queue.push_front(next_path);
@@ -54,9 +54,9 @@ const vector<GameInfo*> XGameScanner::ScanPath(const wstring& path) {
       auto filename = GetFileName(current_path);
       if (memcmp(filename.c_str(), L"Data", 4) == 0) continue;
 
-      GameInfo* game_info = (GameInfo*)calloc(1, sizeof(GameInfo));
-      ScanGame(current_path, game_info);
-      info.push_back(game_info);
+      XGameEntry game_info;
+      ScanGame(current_path, &game_info);
+      info.emplace_back(std::move(game_info));
     }
   }
 
@@ -64,18 +64,36 @@ const vector<GameInfo*> XGameScanner::ScanPath(const wstring& path) {
   return info;
 }  // namespace app
 
-X_STATUS XGameScanner::ScanGame(const std::wstring& path, GameInfo* out_info) {
-  out_info->filename = GetFileName(path);
-  out_info->path = path;
-  out_info->format = ResolveFormat(path);
+X_STATUS XGameScanner::ScanGame(const std::wstring& path,
+                                XGameEntry* out_info) {
+  GameInfo game_info;
+  game_info.filename = GetFileName(path);
+  game_info.path = path;
+  game_info.format = ResolveFormat(path);
 
   XELOGI("==================================================================");
-  auto format = out_info->format;
-  auto format_str = format == XGameFormat::kIso
-                        ? "ISO"
-                        : format == XGameFormat::kStfs
-                              ? "STFS"
-                              : format == XGameFormat::kXex ? "XEX" : "Unknown";
+  XGameFormat format = out_info->format();
+  std::string format_str;
+
+  switch (format) {
+    case XGameFormat::kIso: {
+      format_str = "ISO";
+      break;
+    }
+    case XGameFormat::kStfs: {
+      format_str = "STFS";
+      break;
+    }
+    case XGameFormat::kXex: {
+      format_str = "XEX";
+      break;
+    }
+    default: {
+      format_str = "Unknown";
+      break;
+    }
+  }
+
   XELOGI("Scanning %s", xe::to_string(path).c_str());
   XELOGI("Format is %s", format_str);
 
@@ -91,13 +109,15 @@ X_STATUS XGameScanner::ScanGame(const std::wstring& path, GameInfo* out_info) {
     File* xex_file = nullptr;
     auto status = xex_entry->Open(vfs::FileAccess::kFileReadData, &xex_file);
     if (XSUCCEEDED(status)) {
-      XexScanner::ScanXex(xex_file, &out_info->xex_info);
-    } else
+      XexScanner::ScanXex(xex_file, &game_info);
+    } else {
       XELOGE("Could not load default.xex from device: %x", status);
+    }
 
     xex_file->Destroy();
-  } else
+  } else {
     XELOGE("Could not resolve default.xex");
+  }
 
   // Read NXE
   auto nxe_entry = device->ResolvePath("nxeart");
@@ -105,13 +125,19 @@ X_STATUS XGameScanner::ScanGame(const std::wstring& path, GameInfo* out_info) {
     File* nxe_file = nullptr;
     auto status = nxe_entry->Open(vfs::FileAccess::kFileReadData, &nxe_file);
     if (XSUCCEEDED(status)) {
-      NxeScanner::ScanNxe(nxe_file, &out_info->nxe_info);
-    } else
+      NxeScanner::ScanNxe(nxe_file, &game_info.nxe_info);
+    } else {
       XELOGE("Could not load nxeart from device: %x", status);
+    }
 
     nxe_file->Destroy();
-  } else
+  } else {
     XELOGI("Game does not have an nxeart file");
+  }
+
+  if (out_info) {
+    out_info->apply_info(game_info);
+  }
 
   delete device;
   return X_STATUS_SUCCESS;

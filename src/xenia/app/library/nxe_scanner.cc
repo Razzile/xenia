@@ -8,7 +8,10 @@ using vfs::StfsHeader;
 
 X_STATUS NxeScanner::ScanNxe(File* file, NxeInfo* out_info) {
   // Read Header
-  uint8_t* data = Read(file);
+  size_t file_size = file->entry()->size();
+  uint8_t* data = new uint8_t[file_size];
+
+  Read(file, &data[0]);
   StfsHeader header;
   header.Read(data);
 
@@ -26,6 +29,7 @@ X_STATUS NxeScanner::ScanNxe(File* file, NxeInfo* out_info) {
   //   How can we open the file with a StfsContainerDevice?
 
   delete[] data;
+
   return X_STATUS_SUCCESS;
 }
 
