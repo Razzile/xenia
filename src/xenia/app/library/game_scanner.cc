@@ -68,7 +68,7 @@ X_STATUS XGameScanner::ScanGame(const std::wstring& path,
                                 XGameEntry* out_info) {
   GameInfo game_info;
   game_info.filename = GetFileName(path);
-  game_info.path = path;
+  game_info.path = xe::fix_path_separators(path);
   game_info.format = ResolveFormat(path);
 
   XELOGI("==================================================================");
