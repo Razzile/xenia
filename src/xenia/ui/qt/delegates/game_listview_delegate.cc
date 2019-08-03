@@ -66,11 +66,15 @@ void XGameListViewDelegate::paintIcon(QPixmap& icon, QPainter* painter,
 QSize XGameListViewDelegate::sizeHint(const QStyleOptionViewItem& option,
                                       const QModelIndex& index) const {
   GameColumn column = (GameColumn)index.column();
+
   switch (column) {
     case GameColumn::kIconColumn:
       return QSize(58, 48);
+    case GameColumn::kPathColumn: {
+      return QSize(500, 48);
+    }
     default:
-      return QSize();
+      return QSize(96, 48);
   }
 }
 

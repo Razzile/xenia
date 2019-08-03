@@ -37,6 +37,8 @@ void XGameListView::Build() {
   connect(horizontalHeader(), SIGNAL(customContextMenuRequested(QPoint)),
           SLOT(customHeaderMenuRequested(QPoint)));
 
+  resizeColumnsToContents();
+
   menu_ = new QMenu(this);
 
   auto add_item = [&](const QString& name, GameColumn column) {
