@@ -24,6 +24,8 @@ class NullGraphicsSystem : public GraphicsSystem {
   NullGraphicsSystem();
   ~NullGraphicsSystem() override;
 
+  static bool IsAvailable() { return true; }
+
   std::wstring name() const override { return L"null"; }
   SwapState* swap_state() override { return &swap_state_; }
 

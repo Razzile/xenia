@@ -35,6 +35,8 @@ class VulkanGraphicsSystem : public GraphicsSystem {
   VulkanGraphicsSystem();
   ~VulkanGraphicsSystem() override;
 
+  static bool IsAvailable() { return true; }
+
   std::wstring name() const override { return L"Vulkan"; }
   SwapState* swap_state() override { return &swap_state_; }
 
