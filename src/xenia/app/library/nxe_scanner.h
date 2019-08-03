@@ -5,6 +5,7 @@
 
 namespace xe {
 namespace app {
+
 using vfs::File;
 
 struct NxeInfo {
@@ -16,13 +17,13 @@ struct NxeInfo {
   uint8_t* nxe_slot_image = nullptr;        // TODO
   size_t nxe_slot_image_size;               // TODO
 
-  NxeInfo() {}
+  NxeInfo() = default;
   NxeInfo(const NxeInfo& other) = delete;
   NxeInfo& operator=(const NxeInfo& other) = delete;
   ~NxeInfo() {
-    if (icon != nullptr) delete[] icon;
-    if (nxe_background_image != nullptr) delete[] nxe_background_image;
-    if (nxe_slot_image != nullptr) delete[] nxe_slot_image;
+    delete[] icon;
+    delete[] nxe_background_image;
+    delete[] nxe_slot_image;
   }
 };
 
