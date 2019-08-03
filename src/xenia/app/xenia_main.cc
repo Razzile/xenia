@@ -30,7 +30,6 @@ Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 DEFINE_bool(mount_scratch, false, "Enable scratch mount", "General");
 DEFINE_bool(mount_cache, false, "Enable cache mount", "General");
 DEFINE_bool(show_debug_tab, true, "Show the debug tab in the Qt UI", "General");
-DEFINE_string(library_path, "", "Path to search for games", "General");
 
 namespace xe {
 namespace app {
@@ -44,10 +43,6 @@ int xenia_main(const std::vector<std::wstring>& args) {
 #ifdef DEBUG
   qputenv("QT_SCALE_FACTOR", "0.75");
 #endif
-
-  XGameLibrary* lib = XGameLibrary::Instance();
-  lib->add_path(xe::to_wstring(cvars::library_path));
-  lib->scan_paths();
 
   // Start Qt
   QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

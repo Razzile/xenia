@@ -1,4 +1,5 @@
 #include "xenia/ui/qt/tabs/home_tab.h"
+#include <QFIleDialog>
 #include <QGraphicsEffect>
 #include "xenia/ui/qt/actions/action.h"
 #include "xenia/ui/qt/widgets/separator.h"
@@ -78,8 +79,13 @@ void HomeTab::BuildSidebar() {
 
   sidebar_toolbar_->addSpacing(20);
 
-  sidebar_toolbar_->addAction(0xE838, "Open File");
-  sidebar_toolbar_->addAction(0xE8F4, "Import Folder");
+  auto open_file_btn = sidebar_toolbar_->addAction(0xE838, "Open File");
+  connect(open_file_btn, &XSideBarButton::clicked, this,
+          &HomeTab::OpenFileTriggered);
+
+  auto import_folder_btn = sidebar_toolbar_->addAction(0xE8F4, "Import Folder");
+  connect(import_folder_btn, &XSideBarButton::clicked, this,
+          &HomeTab::ImportFolderTriggered);
 
   sidebar_toolbar_->addSeparator();
 
@@ -168,6 +174,41 @@ void HomeTab::PlayTriggered() {
     path_w[path.length()] = '\0';
 
     wnd->Launch(path_w);
+  }
+}
+
+void HomeTab::OpenFileTriggered() {
+  QString file_name = QFileDialog::getOpenFileName(
+      this, "Open Game", "", tr("Xbox 360 Executable (*.xex);;All Files (*)"));
+  if (!file_name.isEmpty()) {
+    // this manual conversion seems to be required as Qt's std::(w)string impl
+    // and the one i've been linking to seem incompatible
+    wchar_t* path_w = new wchar_t[file_name.length() + 1];
+    file_name.toWCharArray(path_w);
+    path_w[file_name.length()] = '\0';
+
+    XGameLibrary* lib = XGameLibrary::Instance();
+    lib->add_path(path_w);
+    lib->scan_paths();
+
+    list_view_->RefreshGameList();
+  }
+}
+
+void HomeTab::ImportFolderTriggered() {
+  QString path = QFileDialog::getExistingDirectory(this, "Open Folder", "");
+  if (!path.isEmpty()) {
+    // this manual conversion seems to be required as Qt's std::(w)string impl
+    // and the one i've been linking to seem incompatible
+    wchar_t* path_w = new wchar_t[path.length() + 1];
+    path.toWCharArray(path_w);
+    path_w[path.length()] = '\0';
+
+    XGameLibrary* lib = XGameLibrary::Instance();
+    lib->add_path(path_w);
+    lib->scan_paths();
+
+    list_view_->RefreshGameList();
   }
 }
 

@@ -18,6 +18,7 @@ class XGameListView : public XTableView {
  public:
   explicit XGameListView(QWidget* parent = nullptr);
 
+  void RefreshGameList();
  public slots:
   void customHeaderMenuRequested(QPoint pos);
 

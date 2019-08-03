@@ -23,12 +23,20 @@ XGameListView::XGameListView(QWidget* parent) : XTableView(parent) {
 
 void XGameListView::Build() {
   // Properties
+  horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
   setSelectionBehavior(QAbstractItemView::SelectRows);
   setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
   setShowGrid(false);
 
   // Delegates
   this->setItemDelegate(new XGameListViewDelegate);
+
+  connect(model_, &XGameLibraryModel::dataChanged, [this]() {
+    update();
+    setVisible(false);
+    resizeColumnsToContents();
+    setVisible(true);
+  });
 
   proxy_model_->setSourceModel(model_);
   setModel(proxy_model_);
@@ -75,6 +83,8 @@ void XGameListView::Build() {
   add_item("Compatibility", GameColumn::kCompatabilityColumn);
   add_item("# Players", GameColumn::kPlayerCountColumn);
 }
+
+void XGameListView::RefreshGameList() { model_->refresh(); }
 
 void XGameListView::customHeaderMenuRequested(QPoint pos) {
   menu_->popup(horizontalHeader()->viewport()->mapToGlobal(pos));

@@ -161,6 +161,11 @@ int XGameLibraryModel::columnCount(const QModelIndex& parent) const {
   return (int)GameColumn::kColumnCount;
 }
 
+void XGameLibraryModel::refresh() {
+  beginResetModel();
+  endResetModel();
+}
+
 }  // namespace qt
 }  // namespace ui
 }  // namespace xe

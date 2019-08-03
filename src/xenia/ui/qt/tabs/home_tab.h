@@ -19,6 +19,8 @@ class HomeTab : public XTab {
 
  public slots:
   void PlayTriggered();
+  void OpenFileTriggered();
+  void ImportFolderTriggered();
 
  private:
   void Build();

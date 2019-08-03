@@ -59,6 +59,8 @@ class XGameLibraryModel final : public QAbstractTableModel {
   int rowCount(const QModelIndex& parent) const override;
   int columnCount(const QModelIndex& parent) const override;
 
+  void refresh();
+
  private:
   XGameLibrary* library_;
 };
