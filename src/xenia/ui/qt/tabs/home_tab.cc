@@ -1,11 +1,11 @@
 #include "xenia/ui/qt/tabs/home_tab.h"
 #include <QFIleDialog>
 #include <QGraphicsEffect>
+#include "xenia/app/emulator_window.h"
+#include "xenia/base/logging.h"
 #include "xenia/ui/qt/actions/action.h"
 #include "xenia/ui/qt/widgets/separator.h"
 #include "xenia/ui/qt/widgets/slider.h"
-
-#include "xenia/app/emulator_window.h"
 
 namespace xe {
 namespace ui {
@@ -188,8 +188,7 @@ void HomeTab::OpenFileTriggered() {
     path_w[file_name.length()] = '\0';
 
     XGameLibrary* lib = XGameLibrary::Instance();
-    lib->add_path(path_w);
-    lib->scan_paths();
+    lib->ScanPath(path_w);
 
     list_view_->RefreshGameList();
   }
@@ -205,10 +204,12 @@ void HomeTab::ImportFolderTriggered() {
     path_w[path.length()] = '\0';
 
     XGameLibrary* lib = XGameLibrary::Instance();
-    lib->add_path(path_w);
-    lib->scan_paths();
-
-    list_view_->RefreshGameList();
+    lib->ScanPathAsync(path_w,
+                       [this](double progress, const XGameEntry& entry) {
+                         // Just a PoC. In future change to refresh list when
+                         // all games added.
+                         list_view_->RefreshGameList();
+                       });
   }
 }
 

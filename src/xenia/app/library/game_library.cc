@@ -4,23 +4,37 @@
 
 namespace xe {
 namespace app {
+using AsyncCallback = XGameLibrary::AsyncCallback;
 
 XGameLibrary* XGameLibrary::Instance() {
   static XGameLibrary* instance = new XGameLibrary;
   return instance;
 }
 
-bool XGameLibrary::add_path(const std::wstring& path) {
+bool XGameLibrary::ContainsPath(const std::wstring& path) const {
   auto existing = std::find(paths_.begin(), paths_.end(), path);
   if (existing != paths_.end()) {
     return false;  // Path already exists.
   }
-
-  paths_.push_back(path);
   return true;
 }
 
-bool XGameLibrary::remove_path(const std::wstring& path) {
+bool XGameLibrary::ContainsGame(uint32_t title_id) const {
+  return FindGame(title_id) != nullptr;
+}
+
+const XGameEntry* XGameLibrary::FindGame(const uint32_t title_id) const {
+  auto result = std::find_if(games_.begin(), games_.end(),
+                             [title_id](const XGameEntry& entry) {
+                               return entry.title_id() == title_id;
+                             });
+  if (result != games_.end()) {
+    return &*result;
+  }
+  return nullptr;
+}
+
+bool XGameLibrary::RemovePath(const std::wstring& path) {
   auto existing = std::find(paths_.begin(), paths_.end(), path);
   if (existing == paths_.end()) {
     return false;  // Path does not exist.
@@ -30,38 +44,57 @@ bool XGameLibrary::remove_path(const std::wstring& path) {
   return true;
 }
 
-void XGameLibrary::scan_paths() {
-  clear();
+int XGameLibrary::ScanPath(const wstring& path) {
+  int count = 0;
 
-  for (auto path : paths_) {
-    const auto& results = XGameScanner::ScanPath(path);
-    for (const XGameEntry& result : results) {
-      uint32_t title_id = result.title_id();
+  AddPath(path);
+  const auto& results = scanner_.ScanPath(path);
+  for (const XGameEntry& result : results) {
+    count++;
+    AddGame(result);
+  }
+  return count;
+}
 
-      const auto& begin = games_.begin();
-      const auto& end = games_.end();
+int XGameLibrary::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
+  AddPath(path);
 
-      // title already exists in library
-      if (std::find_if(begin, end, [title_id](const XGameEntry& entry) -> bool {
-            return entry.title_id() == title_id;
-          }) != games_.end()) {
-        continue;
-      } else {
-        games_.push_back(result);
-      }
+  int count = (int)scanner_.FindGamesInPath(path).size();
+  return scanner_.ScanPathsAsync(paths_, [=](const XGameEntry& entry) {
+    thread_local int scanned = 0;
+    AddGame(entry);
+    scanned++;
+    if (cb) {
+      cb(((double)scanned / count) * 100.0, entry);
     }
+  });
+}
+
+void XGameLibrary::AddGame(const XGameEntry& game) {
+  uint32_t title_id = game.title_id();
+
+  const auto& begin = games_.begin();
+  const auto& end = games_.end();
+
+  auto result = std::find_if(begin, end, [title_id](const XGameEntry& entry) {
+    return entry.title_id() == title_id;
+  });
+
+  // title already exists in library, overwrite existing
+  if (result != games_.end()) {
+    *result = game;
+  } else {
+    games_.push_back(game);
   }
 }
 
-const XGameEntry* XGameLibrary::game(const uint32_t title_id) const {
-  auto result = std::find_if(games_.begin(), games_.end(),
-                             [title_id](const XGameEntry& entry) {
-                               return entry.title_id() == title_id;
-                             });
-  if (result != games_.end()) {
-    return &*result;
+void XGameLibrary::AddPath(const wstring& path) {
+  auto result = std::find(paths_.begin(), paths_.end(), path);
+
+  // only save unique paths
+  if (result == paths_.end()) {
+    paths_.push_back(path);
   }
-  return nullptr;
 }
 
 }  // namespace app

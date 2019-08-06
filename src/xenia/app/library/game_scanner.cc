@@ -7,28 +7,17 @@
 namespace xe {
 namespace app {
 using filesystem::FileInfo;
+using AsyncCallback = XGameScanner::AsyncCallback;
 
-const vector<XGameEntry> XGameScanner::ScanPath(const wstring& path) {
-  vector<XGameEntry> info;
-
-  // Check if the given path exists
-  if (!filesystem::PathExists(path)) {
-    return info;
-  }
-
-  // Scan if the given path is a file
-  if (!filesystem::IsFolder(path)) {
-    XGameEntry game_info;
-    ScanGame(path, &game_info);
-    info.emplace_back(std::move(game_info));
-    return info;
-  }
-
+std::vector<wstring> XGameScanner::FindGamesInPath(const wstring& path) {
   // Path is a directory, scan recursively
   // TODO: Warn about recursively scanning paths with large hierarchies
+
   std::deque<wstring> queue;
   queue.push_front(path);
 
+  std::vector<wstring> paths;
+  int game_count = 0;
   while (!queue.empty()) {
     wstring current_path = queue.front();
     FileInfo current_file;
@@ -36,7 +25,8 @@ const vector<XGameEntry> XGameScanner::ScanPath(const wstring& path) {
     queue.pop_front();
 
     if (current_file.type == FileInfo::Type::kDirectory) {
-      vector<FileInfo> directory_files = filesystem::ListFiles(current_path);
+      std::vector<FileInfo> directory_files =
+          filesystem::ListFiles(current_path);
       for (FileInfo file : directory_files) {
         if (CompareCaseInsensitive(file.name, L"$SystemUpdate")) continue;
 
@@ -54,18 +44,104 @@ const vector<XGameEntry> XGameScanner::ScanPath(const wstring& path) {
       auto filename = GetFileName(current_path);
       if (memcmp(filename.c_str(), L"Data", 4) == 0) continue;
 
-      XGameEntry game_info;
-      ScanGame(current_path, &game_info);
-      info.emplace_back(std::move(game_info));
+      paths.push_back(current_path);
+      game_count++;
     }
   }
+  return paths;
+}
 
-  XELOGI("Scanned %d files", info.size());
-  return info;
-}  // namespace app
+std::vector<XGameEntry> XGameScanner::ScanPath(const wstring& path) {
+  std::vector<XGameEntry> games;
+
+  // Check if the given path exists
+  if (!filesystem::PathExists(path)) {
+    return games;
+  }
+
+  // Scan if the given path is a file
+  if (!filesystem::IsFolder(path)) {
+    XGameEntry game_entry;
+    ScanGame(path, &game_entry);
+    games.emplace_back(std::move(game_entry));
+    return games;
+  }
+
+  const std::vector<wstring>& game_paths = FindGamesInPath(path);
+  for (const wstring& game_path : game_paths) {
+    XGameEntry game_entry;
+    ScanGame(game_path, &game_entry);
+    games.emplace_back(std::move(game_entry));
+  }
+
+  XELOGI("Scanned %d files", games.size());
+  return games;
+}
+
+int XGameScanner::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
+  if (!filesystem::PathExists(path)) {
+    return 0;
+  }
+
+  if (!filesystem::IsFolder(path)) {
+    XGameEntry game_info;
+    ScanGame(path, &game_info);
+    if (cb) {
+      cb(game_info);
+      return 1;
+    }
+  }
+  const std::vector<wstring>& game_paths = FindGamesInPath(path);
+
+  std::thread scan_thread = std::thread(
+      [this](std::vector<wstring> paths, AsyncCallback cb) {
+        for (const wstring& path : paths) {
+          XGameEntry game_info;
+          ScanGame(path, &game_info);
+          if (cb) {
+            cb(game_info);
+          }
+        }
+      },
+      game_paths, cb);
+  scan_thread.detach();
+
+  return (int)game_paths.size();
+}
+
+int XGameScanner::ScanPathsAsync(const std::vector<wstring>& paths,
+                                 const AsyncCallback& cb) {
+  int count = 0;
+  std::vector<wstring> game_paths;
+  for (const wstring& scan_path : paths) {
+    const std::vector<wstring>& scanned_games = FindGamesInPath(scan_path);
+    game_paths.insert(game_paths.end(), scanned_games.begin(),
+                      scanned_games.end());
+  }
+
+  scan_thread_ = std::thread(
+      [this](std::vector<wstring> paths, AsyncCallback cb) {
+        for (const wstring& path : paths) {
+          XGameEntry game_info;
+          ScanGame(path, &game_info);
+          if (cb) {
+            cb(game_info);
+          }
+        }
+      },
+      game_paths, cb);
+
+  scan_thread_.detach();
+
+  return (int)game_paths.size();
+}
 
 X_STATUS XGameScanner::ScanGame(const std::wstring& path,
                                 XGameEntry* out_info) {
+  if (!out_info) {
+    return X_STATUS_SUCCESS;
+  }
+
   GameInfo game_info;
   game_info.filename = GetFileName(path);
   game_info.path = xe::fix_path_separators(path);
@@ -135,9 +211,7 @@ X_STATUS XGameScanner::ScanGame(const std::wstring& path,
     XELOGI("Game does not have an nxeart file");
   }
 
-  if (out_info) {
-    out_info->apply_info(game_info);
-  }
+  out_info->apply_info(game_info);
 
   delete device;
   return X_STATUS_SUCCESS;
