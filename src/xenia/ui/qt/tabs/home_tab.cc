@@ -1,9 +1,11 @@
 #include "xenia/ui/qt/tabs/home_tab.h"
 #include <QFIleDialog>
 #include <QGraphicsEffect>
+#include <QProgressBar>
 #include "xenia/app/emulator_window.h"
 #include "xenia/base/logging.h"
 #include "xenia/ui/qt/actions/action.h"
+#include "xenia/ui/qt/main_window.h"
 #include "xenia/ui/qt/widgets/separator.h"
 #include "xenia/ui/qt/widgets/slider.h"
 
@@ -203,13 +205,44 @@ void HomeTab::ImportFolderTriggered() {
     path.toWCharArray(path_w);
     path_w[path.length()] = '\0';
 
+    QWidget* progress_widget = new QWidget();
+    QHBoxLayout* layout = new QHBoxLayout();
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(16);
+    progress_widget->setLayout(layout);
+
+    QLabel* label = new QLabel("Scanning directories...");
+    label->setStyleSheet("color: #c7c7c7");
+    layout->addWidget(label);
+
+    QProgressBar* bar = new QProgressBar();
+    bar->setFixedSize(120, 16);
+    bar->setRange(0, 100);
+    bar->setValue(0);
+    bar->setTextVisible(false);
+    layout->addWidget(bar);
+
+    layout->addStretch();
+
+    MainWindow* window = qobject_cast<MainWindow*>(this->window());
+    window->AddStatusBarWidget(progress_widget);
+
     XGameLibrary* lib = XGameLibrary::Instance();
-    lib->ScanPathAsync(path_w,
-                       [this](double progress, const XGameEntry& entry) {
-                         // Just a PoC. In future change to refresh list when
-                         // all games added.
-                         list_view_->RefreshGameList();
-                       });
+    lib->ScanPathAsync(path_w, [=](double progress, const XGameEntry& entry) {
+      // update progress bar on main UI thread
+      QMetaObject::invokeMethod(
+          bar,
+          [=]() {
+            bar->setValue(progress);
+            if (progress == 100.0) {
+              window->RemoveStatusBarWidget(progress_widget);
+            }
+          },
+          Qt::QueuedConnection);
+      // Just a PoC. In future change to refresh list
+      // when all games added.
+      list_view_->RefreshGameList();
+    });
   }
 }
 
