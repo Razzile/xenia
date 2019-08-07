@@ -6,7 +6,8 @@ namespace xe {
 namespace app {
 using vfs::StfsHeader;
 
-X_STATUS NxeScanner::ScanNxe(File* file, NxeInfo* out_info) {
+X_STATUS NxeScanner::ScanNxe(File* file, GameInfo* out_info) {
+  NxeInfo* nxe_info = &out_info->nxe_info;
   // Read Header
   size_t file_size = file->entry()->size();
   uint8_t* data = new uint8_t[file_size];
@@ -17,12 +18,12 @@ X_STATUS NxeScanner::ScanNxe(File* file, NxeInfo* out_info) {
 
   // Read Title
   std::wstring title(header.title_name);
-  out_info->game_title = xe::to_string(title);
+  nxe_info->game_title = xe::to_string(title);
 
   // Read Icon
-  out_info->icon_size = header.title_thumbnail_image_size;
-  out_info->icon = (uint8_t*)calloc(1, out_info->icon_size);
-  memcpy(out_info->icon, header.title_thumbnail_image, out_info->icon_size);
+  nxe_info->icon_size = header.title_thumbnail_image_size;
+  nxe_info->icon = (uint8_t*)calloc(1, nxe_info->icon_size);
+  memcpy(nxe_info->icon, header.title_thumbnail_image, nxe_info->icon_size);
 
   // TODO: Read nxebg.jpg
   // TODO: Read nxeslot.jpg

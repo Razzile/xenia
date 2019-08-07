@@ -480,6 +480,11 @@ X_STATUS ReadXexHeader(File* file, XexInfo* info) {
 
 X_STATUS ReadXexResources(File* file, XexInfo* info) {
   auto resources = info->resources;
+  if (resources == nullptr) {
+    XELOGI("XEX has no resources");
+    return X_STATUS_SUCCESS;
+  }
+
   XELOGI("Reading %d XEX resources.", info->resources_count);
 
   for (size_t i = 0; i < info->resources_count; i++) {
@@ -488,7 +493,7 @@ X_STATUS ReadXexResources(File* file, XexInfo* info) {
     uint32_t title_id = info->execution_info.title_id;
     uint32_t name =
         xe::string_util::from_string<uint32_t>(resource->name, true);
-    XELOGI("Found resource: %s", resource->name);
+    XELOGI("Found resource: %X", name);
 
     // Game resources are listed as the TitleID
     if (name == title_id) {

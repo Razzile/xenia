@@ -11,7 +11,7 @@ using vfs::File;
 
 class NxeScanner {
  public:
-  static X_STATUS ScanNxe(File* file, NxeInfo* out_info);
+  static X_STATUS ScanNxe(File* file, GameInfo* out_info);
 };
 
 }  // namespace app

@@ -162,20 +162,14 @@ inline X_STATUS Read(File* file, void* buffer, size_t offset = 0,
   return X_STATUS_UNSUCCESSFUL;
 }
 
-inline std::string ReadFileMagic(const wstring& path, size_t length = 4) {
-  char* buffer = new char[length];
-
-  std::ifstream file(path, std::ios::binary);
-  if (file.is_open()) {
-    file.seekg(0, std::ios::beg);
-    file.read(buffer, length);
-    file.close();
+inline void ReadStfsMagic(const wstring& path, char out[4]) {
+  using namespace xe::filesystem;
+  auto file = OpenFile(path, "r");
+  if (file) {
+    size_t read = 0;
+    fread(out, 4, 1, file);
+    fclose(file);
   }
-
-  std::string magic(buffer);
-
-  delete[] buffer;
-  return magic;
 }
 
 inline const XGameFormat ResolveFormat(const wstring& path) {
@@ -185,9 +179,9 @@ inline const XGameFormat ResolveFormat(const wstring& path) {
   if (CompareCaseInsensitive(extension, L"xex")) return XGameFormat::kXex;
 
   // STFS Container
-  std::string magic;
+  char magic[4];
   if (extension.length() == 0) {
-    magic = ReadFileMagic(path);
+    ReadStfsMagic(path, magic);
 
     if (memcmp(&magic, "LIVE", 4) == 0 || memcmp(&magic, "CON ", 4) == 0 ||
         memcmp(&magic, "PIRS", 4) == 0)
@@ -197,18 +191,18 @@ inline const XGameFormat ResolveFormat(const wstring& path) {
   return XGameFormat::kUnknown;
 }
 
-inline Device* CreateDevice(const wstring& path) {
+inline std::unique_ptr<Device> CreateDevice(const wstring& path) {
   std::string mount_path = "\\SCAN";
   XGameFormat format = ResolveFormat(path);
 
   switch (format) {
     case XGameFormat::kIso:
-      return new vfs::DiscImageDevice(mount_path, path);
+      return std::make_unique<vfs::DiscImageDevice>(mount_path, path);
     case XGameFormat::kXex:
-      return new vfs::HostPathDevice(mount_path, GetParentDirectory(path),
-                                     true);
+      return std::make_unique<vfs::HostPathDevice>(
+          mount_path, GetParentDirectory(path), true);
     case XGameFormat::kStfs:
-      return new vfs::StfsContainerDevice(mount_path, path);
+      return std::make_unique<vfs::StfsContainerDevice>(mount_path, path);
     default:
       return nullptr;
   }

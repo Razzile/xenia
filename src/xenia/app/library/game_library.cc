@@ -48,7 +48,7 @@ int XGameLibrary::ScanPath(const wstring& path) {
   int count = 0;
 
   AddPath(path);
-  const auto& results = scanner_.ScanPath(path);
+  const auto& results = XGameScanner::ScanPath(path);
   for (const XGameEntry& result : results) {
     count++;
     AddGame(result);
@@ -59,15 +59,14 @@ int XGameLibrary::ScanPath(const wstring& path) {
 int XGameLibrary::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
   AddPath(path);
 
-  int count = (int)scanner_.FindGamesInPath(path).size();
-  return scanner_.ScanPathsAsync(paths_, [=](const XGameEntry& entry) {
-    thread_local int scanned = 0;
-    AddGame(entry);
-    scanned++;
-    if (cb) {
-      cb(((double)scanned / count) * 100.0, entry);
-    }
-  });
+  int count = (int)XGameScanner::FindGamesInPath(path).size();
+  return XGameScanner::ScanPathAsync(
+      path, [=](const XGameEntry& entry, int scanned) {
+        AddGame(entry);
+        if (cb) {
+          cb(((double)scanned / count) * 100.0, entry);
+        }
+      });
 }
 
 void XGameLibrary::AddGame(const XGameEntry& game) {
@@ -76,9 +75,12 @@ void XGameLibrary::AddGame(const XGameEntry& game) {
   const auto& begin = games_.begin();
   const auto& end = games_.end();
 
-  auto result = std::find_if(begin, end, [title_id](const XGameEntry& entry) {
-    return entry.title_id() == title_id;
-  });
+  auto result = end;
+  if (title_id != 0x00000000) {
+    result = std::find_if(begin, end, [title_id](const XGameEntry& entry) {
+      return entry.title_id() == title_id;
+    });
+  }
 
   // title already exists in library, overwrite existing
   if (result != games_.end()) {

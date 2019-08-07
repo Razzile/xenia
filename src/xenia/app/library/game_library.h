@@ -58,7 +58,6 @@ class XGameLibrary {
   void AddPath(const wstring& path);
   XGameLibrary() = default;
 
-  XGameScanner scanner_;
   std::vector<XGameEntry> games_;
   std::vector<std::wstring> paths_;
 };
