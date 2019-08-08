@@ -212,7 +212,6 @@ X_STATUS XGameScanner::ScanGame(const std::wstring& path,
     }
 
     nxe_file->Destroy();
-    return X_STATUS_UNSUCCESSFUL;
   } else {
     XELOGI("Game does not have an nxeart file");
   }
