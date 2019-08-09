@@ -59,9 +59,10 @@ int XGameLibrary::ScanPath(const wstring& path) {
 int XGameLibrary::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
   AddPath(path);
 
-  int count = (int)XGameScanner::FindGamesInPath(path).size();
-  return XGameScanner::ScanPathAsync(
-      path, [=](const XGameEntry& entry, int scanned) {
+  auto paths = XGameScanner::FindGamesInPath(path);
+  int count = static_cast<int>(paths.size());
+  return XGameScanner::ScanPathsAsync(
+      paths, [=](const XGameEntry& entry, int scanned) {
         AddGame(entry);
         if (cb) {
           cb(((double)scanned / count) * 100.0, entry);

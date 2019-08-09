@@ -78,16 +78,15 @@ std::vector<XGameEntry> XGameScanner::ScanPath(const wstring& path) {
     } else {
       games.emplace_back(std::move(game_entry));
     }
-    return games;
-  }
-
-  const std::vector<wstring>& game_paths = FindGamesInPath(path);
-  for (const wstring& game_path : game_paths) {
-    XGameEntry game_entry;
-    if (XFAILED(ScanGame(game_path, &game_entry))) {
-      continue;
+  } else {
+    const std::vector<wstring>& game_paths = FindGamesInPath(path);
+    for (const wstring& game_path : game_paths) {
+      XGameEntry game_entry;
+      if (XFAILED(ScanGame(game_path, &game_entry))) {
+        continue;
+      }
+      games.emplace_back(std::move(game_entry));
     }
-    games.emplace_back(std::move(game_entry));
   }
 
   XELOGI("Scanned %d files", games.size());
@@ -101,14 +100,6 @@ int XGameScanner::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
 
 int XGameScanner::ScanPathsAsync(const std::vector<wstring>& paths,
                                  const AsyncCallback& cb) {
-  int count = 0;
-  std::vector<wstring> game_paths;
-  for (const wstring& scan_path : paths) {
-    const std::vector<wstring>& scanned_games = FindGamesInPath(scan_path);
-    game_paths.insert(game_paths.end(), scanned_games.begin(),
-                      scanned_games.end());
-  }
-
   std::thread scan_thread = std::thread(
       [](std::vector<wstring> paths, AsyncCallback cb) {
         thread_local int scanned = 0;
@@ -131,11 +122,11 @@ int XGameScanner::ScanPathsAsync(const std::vector<wstring>& paths,
           }
         }
       },
-      game_paths, cb);
+      paths, cb);
 
   scan_thread.detach();
 
-  return (int)game_paths.size();
+  return (int)paths.size();
 }
 
 X_STATUS XGameScanner::ScanGame(const std::wstring& path,
