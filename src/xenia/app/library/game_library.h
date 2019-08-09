@@ -4,6 +4,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "xenia/app/library/game_entry.h"
@@ -60,6 +61,7 @@ class XGameLibrary {
 
   std::vector<XGameEntry> games_;
   std::vector<std::wstring> paths_;
+  std::mutex mutex_;
 };
 
 }  // namespace app

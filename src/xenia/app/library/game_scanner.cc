@@ -1,11 +1,13 @@
 #include "xenia/app/library/game_scanner.h"
 #include "xenia/app/library/scanner_utils.h"
 #include "xenia/base/logging.h"
+#include "xenia/base/threading.h"
 
 #include <deque>
 
 namespace xe {
 namespace app {
+
 using filesystem::FileInfo;
 using AsyncCallback = XGameScanner::AsyncCallback;
 
@@ -100,26 +102,51 @@ int XGameScanner::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
 
 int XGameScanner::ScanPathsAsync(const std::vector<wstring>& paths,
                                  const AsyncCallback& cb) {
+  // start scanning in a new thread
+  // TODO: switch to xe::threading::Thread instead of std::thread?
   std::thread scan_thread = std::thread(
       [](std::vector<wstring> paths, AsyncCallback cb) {
-        thread_local int scanned = 0;
-        for (const wstring& path : paths) {
-          scanned++;
-          if (!filesystem::PathExists(path)) {
-            continue;
-          }
+        std::atomic<int> scanned = 0;
 
-          if (filesystem::IsFolder(path)) {
-            continue;
+        auto scan_func = [&](const std::vector<wstring>& paths, size_t start,
+                             size_t size) {
+          for (auto it = paths.begin() + start;
+               it != paths.begin() + start + size; ++it) {
+            scanned++;
+            XGameEntry game_info;
+            auto status = ScanGame(*it, &game_info);
+            if (cb && XSUCCEEDED(status)) {
+              cb(game_info, scanned);
+            } else {
+              XELOGE("Failed to scan game at %ls", it->c_str());
+            }
           }
+        };
 
-          XGameEntry game_info;
-          auto status = ScanGame(path, &game_info);
-          if (cb && XSUCCEEDED(status)) {
-            cb(game_info, scanned);
-          } else {
-            // XELOGE("Failed to scan game at %ls", path.c_str());
+        uint32_t thread_count = xe::threading::logical_processor_count();
+
+        std::vector<std::thread> threads;
+
+        // scan games on this thread if the user has < 4 cores
+        if (thread_count < 4) {
+          scan_func(paths, 0, paths.size());
+        } else {
+          // split workload into even amounts based on core count
+          size_t total_size = paths.size();
+          size_t work_size = paths.size() / thread_count;
+          size_t leftover = paths.size() % thread_count;
+
+          if (work_size > 0) {
+            for (uint32_t i = 0; i < thread_count; i++) {
+              threads.emplace_back(std::move(
+                  std::thread(scan_func, paths, i * work_size, work_size)));
+            }
           }
+          scan_func(paths, total_size - leftover, leftover);
+        }
+
+        for (auto& thread : threads) {
+          thread.join();
         }
       },
       paths, cb);

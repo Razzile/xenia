@@ -71,6 +71,8 @@ int XGameLibrary::ScanPathAsync(const wstring& path, const AsyncCallback& cb) {
 }
 
 void XGameLibrary::AddGame(const XGameEntry& game) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
   uint32_t title_id = game.title_id();
 
   const auto& begin = games_.begin();
