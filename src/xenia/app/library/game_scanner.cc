@@ -18,10 +18,12 @@ std::vector<wstring> XGameScanner::FindGamesInPath(const wstring& path) {
 
   std::vector<wstring> paths;
   int game_count = 0;
+
   while (!queue.empty()) {
     wstring current_path = queue.front();
     FileInfo current_file;
     filesystem::GetInfo(current_path, &current_file);
+
     queue.pop_front();
 
     if (current_file.type == FileInfo::Type::kDirectory) {
@@ -31,14 +33,20 @@ std::vector<wstring> XGameScanner::FindGamesInPath(const wstring& path) {
         if (CompareCaseInsensitive(file.name, L"$SystemUpdate")) continue;
 
         auto next_path = xe::join_paths(current_path, file.name);
+        // Skip searching directories with an extracted default.xex file
+        if (xe::filesystem::PathExists(
+                xe::join_paths(next_path, L"default.xex"))) {
+          queue.push_front(xe::join_paths(next_path, L"default.xex"));
+          continue;
+        }
         queue.push_front(next_path);
       }
     } else {
       // Exclusively scan iso, xex, or files without an extension.
       auto extension = GetFileExtension(current_path);
-      if (memcmp(&extension, L"xex", 3) && memcmp(&extension, L"iso", 3) &&
-          extension.size() > 0)
+      if (!extension.empty() && extension != L"xex" && extension != L"iso") {
         continue;
+      }
 
       // Do not attempt to scan SVOD data files
       auto filename = GetFileName(current_path);
