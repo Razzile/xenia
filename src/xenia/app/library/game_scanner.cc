@@ -159,7 +159,11 @@ int XGameScanner::ScanPathsAsync(const std::vector<wstring>& paths,
 X_STATUS XGameScanner::ScanGame(const std::wstring& path,
                                 XGameEntry* out_info) {
   if (!out_info) {
-    return X_STATUS_SUCCESS;
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  if (!filesystem::PathExists(path)) {
+    return X_STATUS_UNSUCCESSFUL;
   }
 
   XGameFormat format = ResolveFormat(path);

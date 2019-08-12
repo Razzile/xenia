@@ -200,7 +200,7 @@ inline std::unique_ptr<Device> CreateDevice(const wstring& path) {
       return std::make_unique<vfs::DiscImageDevice>(mount_path, path);
     case XGameFormat::kXex:
       return std::make_unique<vfs::HostPathDevice>(
-          mount_path, GetParentDirectory(path), true);
+          mount_path, GetParentDirectory(xe::fix_path_separators(path)), true);
     case XGameFormat::kStfs:
       return std::make_unique<vfs::StfsContainerDevice>(mount_path, path);
     default:
