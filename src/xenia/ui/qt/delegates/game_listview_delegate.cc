@@ -18,28 +18,35 @@ XGameListViewDelegate::XGameListViewDelegate(QWidget* parent)
 void XGameListViewDelegate::paint(QPainter* painter,
                                   const QStyleOptionViewItem& option,
                                   const QModelIndex& index) const {
-  // Override options
+  painter->save();
   auto options = QStyleOptionViewItem(option);
   options.state &= (~QStyle::State_HasFocus);
 
+  initStyleOption(&options, index);
   GameColumn column = (GameColumn)index.column();
   switch (column) {
     case GameColumn::kIconColumn: {
+      if (index.data().canConvert<QImage>()) {
+        QStyledItemDelegate::paint(painter, options, index);
+        QImage image = qvariant_cast<QImage>(index.data());
+        QPixmap pixmap = QPixmap::fromImage(image);
+        pixmap.setDevicePixelRatio(painter->device()->devicePixelRatioF());
+        paintIcon(pixmap, painter, options, index);
+      }
+      break;
+    }
+    default: {
       QStyledItemDelegate::paint(painter, options, index);
-      QImage icon = index.data().value<QImage>();
-      QPixmap pixmap = QPixmap::fromImage(icon);
-
-      pixmap.setDevicePixelRatio(painter->device()->devicePixelRatioF());
-      paintIcon(pixmap, painter, options, index);
-    } break;
-    default:
-      QStyledItemDelegate::paint(painter, options, index);
+    }
   }
+  painter->restore();
 }
 
 void XGameListViewDelegate::paintIcon(QPixmap& icon, QPainter* painter,
                                       const QStyleOptionViewItem& options,
                                       const QModelIndex& index) const {
+  painter->save();
+
   // Get the column bounds
   double col_x = options.rect.x();
   double col_y = options.rect.y();
@@ -59,8 +66,9 @@ void XGameListViewDelegate::paintIcon(QPixmap& icon, QPainter* painter,
   // adding QPainter::Antialiasing here smoothes masked edges
   // but makes the image look slightly blurry
   painter->setRenderHints(QPainter::SmoothPixmapTransform);
-
   painter->drawPixmap(icon_rect, icon, icon.rect());
+
+  painter->restore();
 }
 
 QSize XGameListViewDelegate::sizeHint(const QStyleOptionViewItem& option,
