@@ -38,7 +38,7 @@ class Themeable : public T {
     }
   };
 
-  void paintEvent(QPaintEvent* event) override {
+  virtual void paintEvent(QPaintEvent* event) override {
     QStyleOption opt;
     opt.init(this);
     QPainter p(this);
