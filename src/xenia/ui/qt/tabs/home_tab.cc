@@ -1,7 +1,9 @@
 #include "xenia/ui/qt/tabs/home_tab.h"
+
 #include <QFIleDialog>
 #include <QGraphicsEffect>
 #include <QProgressBar>
+
 #include "xenia/app/emulator_window.h"
 #include "xenia/base/logging.h"
 #include "xenia/ui/qt/actions/action.h"
@@ -181,7 +183,8 @@ void HomeTab::PlayTriggered() {
 
 void HomeTab::OpenFileTriggered() {
   QString file_name = QFileDialog::getOpenFileName(
-      this, "Open Game", "", tr("Xbox 360 Executable (*.xex);;All Files (*)"));
+      this, "Open Game", "",
+      tr("Xbox 360 Executable (*.xex);;Disc Image (*.iso);;All Files (*)"));
   if (!file_name.isEmpty()) {
     // this manual conversion seems to be required as Qt's std::(w)string impl
     // and the one i've been linking to seem incompatible
