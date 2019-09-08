@@ -2,11 +2,11 @@ QWidget#DebugTab QLabel {
   color: $primary;
 }
 
-QWidget#DebugTab > QScrollArea { 
+QWidget#DebugTab QScrollArea { 
   background: transparent; 
   border: none;
 }
-QWidget#DebugTab > QScrollArea > QWidget > QWidget { 
+QWidget#DebugTab QScrollArea > QWidget > QWidget { 
   background: transparent; 
 }
 

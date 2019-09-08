@@ -47,18 +47,11 @@ void DebugTab::Build() {
 
   content_widget_ = new QStackedWidget();
 
-  QScrollArea* scroll_area = new QScrollArea(this);
-  scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  /*scroll_area->viewport()->setBackgroundRole(QPalette::Dark);
-  scroll_area->viewport()->setAutoFillBackground(true);*/
-  scroll_area->setWidget(content_widget_);
-  scroll_area->setWidgetResizable(true);
-
   for (const SidebarItem& item : sidebar_items_) {
     content_widget_->addWidget(item.widget);
   }
 
-  layout_->addWidget(scroll_area);
+  layout_->addWidget(content_widget_);
 }
 
 void DebugTab::BuildSidebar() {
@@ -145,6 +138,12 @@ QWidget* DebugTab::CreateComponentsTab() {
   QWidget* w = new QWidget();
   w->setSizePolicy(QSizePolicy::MinimumExpanding,
                    QSizePolicy::MinimumExpanding);
+
+  QScrollArea* scroll_area = new QScrollArea(this);
+  scroll_area->setWidget(w);
+  scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scroll_area->setWidgetResizable(true);
+
   QVBoxLayout* layout = new QVBoxLayout();
   w->setLayout(layout);
 
@@ -159,7 +158,7 @@ QWidget* DebugTab::CreateComponentsTab() {
 
   layout->addStretch();
 
-  return w;
+  return scroll_area;
 }
 QWidget* DebugTab::CreateNavigationTab() {
   QWidget* w = new QWidget();
