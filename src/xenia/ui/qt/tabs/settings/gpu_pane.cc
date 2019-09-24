@@ -5,8 +5,10 @@ namespace ui {
 namespace qt {
 
 void GPUPane::Build() {
-  widget_ = new QWidget();
-  widget_->setStyleSheet("background: orange");
+  QWidget* widget = new QWidget();
+  widget->setStyleSheet("background: orange");
+
+  set_widget(widget);
 }
 
 }  // namespace qt

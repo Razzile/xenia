@@ -27,11 +27,12 @@ class SettingsPane : public Themeable<QWidget> {
   virtual void Build() = 0;
 
  protected:
-  QWidget* widget_ = nullptr;
+  void set_widget(QWidget* widget) { widget_ = widget; }
 
  private:
   QChar glyph_;
   QString title_;
+  QWidget* widget_ = nullptr;
 };
 
 }  // namespace qt

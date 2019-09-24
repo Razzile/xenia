@@ -5,8 +5,10 @@ namespace ui {
 namespace qt {
 
 void ControlsPane::Build() {
-  widget_ = new QWidget();
-  widget_->setStyleSheet("background: yellow");
+  QWidget* widget = new QWidget();
+  widget->setStyleSheet("background: yellow");
+
+  set_widget(widget);
 }
 
 }  // namespace qt
