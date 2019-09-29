@@ -7,12 +7,20 @@ namespace xe {
 namespace ui {
 namespace qt {
 
+class XGroupBox;
+
 class GeneralPane : public SettingsPane {
   Q_OBJECT
  public:
   explicit GeneralPane() : SettingsPane(0xE713, "General") {}
 
   void Build() override;
+
+ private:
+  XGroupBox* CreateGeneralGroupBox();
+  XGroupBox* CreateUpdateGroupBox();
+  XGroupBox* CreateWindowGroupBox();
+  XGroupBox* CreateLogGroupBox();
 };
 
 }  // namespace qt
