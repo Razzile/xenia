@@ -4,7 +4,6 @@
 #include <QGraphicsEffect>
 #include <QHBoxLayout>
 #include <QMenu>
-#include <QScrollArea>
 
 #include "xenia/ui/qt/widgets/checkbox.h"
 #include "xenia/ui/qt/widgets/combobox.h"
@@ -13,6 +12,7 @@
 #include "xenia/ui/qt/widgets/line_edit.h"
 #include "xenia/ui/qt/widgets/push_button.h"
 #include "xenia/ui/qt/widgets/radio_button.h"
+#include "xenia/ui/qt/widgets/scroll_area.h"
 #include "xenia/ui/qt/widgets/separator.h"
 #include "xenia/ui/qt/widgets/slider.h"
 #include "xenia/ui/qt/widgets/tab_selector.h"
@@ -139,10 +139,8 @@ QWidget* DebugTab::CreateComponentsTab() {
   w->setSizePolicy(QSizePolicy::MinimumExpanding,
                    QSizePolicy::MinimumExpanding);
 
-  QScrollArea* scroll_area = new QScrollArea(this);
+  XScrollArea* scroll_area = new XScrollArea(this);
   scroll_area->setWidget(w);
-  scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  scroll_area->setWidgetResizable(true);
 
   QVBoxLayout* layout = new QVBoxLayout();
   w->setLayout(layout);

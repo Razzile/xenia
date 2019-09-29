@@ -35,5 +35,6 @@
         <file>resources/themes/Xenia/stylesheets/XTextEdit.css</file>
         <file>resources/themes/Xenia/stylesheets/XLineEdit.css</file>
         <file>resources/themes/Xenia/stylesheets/SettingsTab.css</file>
+        <file>resources/themes/Xenia/stylesheets/XScrollArea.css</file>
     </qresource>
 </RCC>
