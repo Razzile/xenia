@@ -93,10 +93,14 @@ constexpr uint32_t TextureCache::kScaledResolveBufferSize;
 constexpr uint32_t TextureCache::kScaledResolveHeapSizeLog2;
 constexpr uint32_t TextureCache::kScaledResolveHeapSize;
 
-// Assuming all single-component textures have its only component replicated.
-// For DXT3A and DXT5A, this is according to:
+// For formats with less than 4 components, assuming the last component is
+// replicated into the non-existent ones, similar to what is done for unused
+// components of operands in shaders.
+// For DXT3A and DXT5A, RRRR swizzle is specified in:
 // http://fileadmin.cs.lth.se/cs/Personal/Michael_Doggett/talks/unc-xenos-doggett.pdf
 // Halo 3 also expects replicated components in k_8 sprites.
+// DXN is read as RG in Halo 3, but as RA in Call of Duty.
+// TODO(Triang3l): Find out the correct contents of unused texture components.
 const TextureCache::HostFormat TextureCache::host_formats_[64] = {
     // k_1_REVERSE
     {DXGI_FORMAT_UNKNOWN,
@@ -154,7 +158,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_B5G6R5_UNORM,
      ResolveTileMode::k16bpp,
-     {0, 1, 2, 3}},
+     {0, 1, 2, 2}},
     // k_6_5_5
     // On the host, green bits in blue, blue bits in green.
     {DXGI_FORMAT_B5G6R5_UNORM,
@@ -166,7 +170,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_B5G6R5_UNORM,
      ResolveTileMode::k16bpp,
-     {0, 2, 1, 3}},
+     {0, 2, 1, 1}},
     // k_8_8_8_8
     {DXGI_FORMAT_R8G8B8A8_TYPELESS,
      DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -221,7 +225,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R8G8_UNORM,
      ResolveTileMode::k16bpp,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_Cr_Y1_Cb_Y0_REP
     // Red and blue probably must be swapped, similar to k_Y1_Cr_Y0_Cb_REP.
     {DXGI_FORMAT_G8R8_G8B8_UNORM,
@@ -261,7 +265,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_8_8_8_8_A
     {DXGI_FORMAT_UNKNOWN,
      DXGI_FORMAT_UNKNOWN,
@@ -295,7 +299,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16B16A16_UNORM,
      ResolveTileMode::kR11G11B10AsRGBA16,
-     {0, 1, 2, 3}},
+     {0, 1, 2, 2}},
     // k_11_11_10
     {DXGI_FORMAT_R16G16B16A16_TYPELESS,
      DXGI_FORMAT_R16G16B16A16_UNORM,
@@ -306,7 +310,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16B16A16_UNORM,
      ResolveTileMode::kR10G11B11AsRGBA16,
-     {0, 1, 2, 3}},
+     {0, 1, 2, 2}},
     // k_DXT1
     {DXGI_FORMAT_BC1_UNORM,
      DXGI_FORMAT_BC1_UNORM,
@@ -399,7 +403,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16_UNORM,
      ResolveTileMode::k32bpp,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_16_16_16_16
     // The resolve format being unorm is correct (with snorm distortion effects
     // in Halo 3 cause stretching of one corner of the screen).
@@ -434,7 +438,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16_FLOAT,
      ResolveTileMode::k32bpp,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_16_16_16_16_EXPAND
     {DXGI_FORMAT_R16G16B16A16_FLOAT,
      DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -467,7 +471,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16_FLOAT,
      ResolveTileMode::k32bpp,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_16_16_16_16_FLOAT
     {DXGI_FORMAT_R16G16B16A16_FLOAT,
      DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -500,7 +504,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_32_32_32_32
     {DXGI_FORMAT_UNKNOWN,
      DXGI_FORMAT_UNKNOWN,
@@ -533,7 +537,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R32G32_FLOAT,
      ResolveTileMode::k64bpp,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_32_32_32_32_FLOAT
     {DXGI_FORMAT_R32G32B32A32_FLOAT,
      DXGI_FORMAT_R32G32B32A32_FLOAT,
@@ -566,7 +570,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_16_MPEG
     {DXGI_FORMAT_UNKNOWN,
      DXGI_FORMAT_UNKNOWN,
@@ -588,7 +592,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_8_INTERLACED
     {DXGI_FORMAT_UNKNOWN,
      DXGI_FORMAT_UNKNOWN,
@@ -621,7 +625,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_16_INTERLACED
     {DXGI_FORMAT_UNKNOWN,
      DXGI_FORMAT_UNKNOWN,
@@ -654,10 +658,8 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_DXN
-    // Appears to be luminance-alpha, like ATI 3Dc and LATC in OpenGL. Call of
-    // Duty 4 reads this with XW swizzle in the shader.
     {DXGI_FORMAT_BC5_UNORM,
      DXGI_FORMAT_BC5_UNORM,
      LoadMode::k128bpb,
@@ -667,7 +669,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kDXNToRG8,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 0, 0, 1}},
+     {0, 1, 1, 1}},
     // k_8_8_8_8_AS_16_16_16_16
     {DXGI_FORMAT_R8G8B8A8_TYPELESS,
      DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -733,7 +735,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16B16A16_UNORM,
      ResolveTileMode::kR11G11B10AsRGBA16,
-     {0, 1, 2, 3}},
+     {0, 1, 2, 2}},
     // k_11_11_10_AS_16_16_16_16
     {DXGI_FORMAT_R16G16B16A16_TYPELESS,
      DXGI_FORMAT_R16G16B16A16_UNORM,
@@ -744,7 +746,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_R16G16B16A16_UNORM,
      ResolveTileMode::kR10G11B11AsRGBA16,
-     {0, 1, 2, 3}},
+     {0, 1, 2, 2}},
     // k_32_32_32_FLOAT
     {DXGI_FORMAT_UNKNOWN,
      DXGI_FORMAT_UNKNOWN,
@@ -755,7 +757,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 2, 2}},
     // k_DXT3A
     // R8_UNORM has the same size as BC2, but doesn't have the 4x4 size
     // alignment requirement.
@@ -790,7 +792,7 @@ const TextureCache::HostFormat TextureCache::host_formats_[64] = {
      LoadMode::kUnknown,
      DXGI_FORMAT_UNKNOWN,
      ResolveTileMode::kUnknown,
-     {0, 1, 2, 3}},
+     {0, 1, 1, 1}},
     // k_DXT3A_AS_1_1_1_1
     {DXGI_FORMAT_B4G4R4A4_UNORM,
      DXGI_FORMAT_B4G4R4A4_UNORM,
