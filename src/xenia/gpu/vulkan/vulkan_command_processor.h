@@ -91,6 +91,9 @@ class VulkanCommandProcessor : public CommandProcessor {
                         VulkanShader* pixel_shader);
   bool IssueCopy() override;
 
+  void InitializeTrace() override;
+  void FinalizeTrace() override;
+
   xe::ui::vulkan::VulkanDevice* device_ = nullptr;
 
   uint64_t dirty_float_constants_ = 0;  // Dirty float constants in blocks of 4

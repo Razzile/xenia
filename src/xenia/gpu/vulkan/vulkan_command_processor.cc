@@ -1281,6 +1281,10 @@ bool VulkanCommandProcessor::IssueCopy() {
   return true;
 }
 
+void VulkanCommandProcessor::InitializeTrace() {}
+
+void VulkanCommandProcessor::FinalizeTrace() {}
+
 }  // namespace vulkan
 }  // namespace gpu
 }  // namespace xe
