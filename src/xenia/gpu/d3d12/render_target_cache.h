@@ -10,10 +10,10 @@
 #ifndef XENIA_GPU_D3D12_RENDER_TARGET_CACHE_H_
 #define XENIA_GPU_D3D12_RENDER_TARGET_CACHE_H_
 
-#include <gflags/gflags.h>
-
+#include <memory>
 #include <unordered_map>
 
+#include "xenia/base/cvar.h"
 #include "xenia/gpu/d3d12/d3d12_shader.h"
 #include "xenia/gpu/d3d12/shared_memory.h"
 #include "xenia/gpu/d3d12/texture_cache.h"
@@ -22,6 +22,7 @@
 #include "xenia/gpu/xenos.h"
 #include "xenia/memory.h"
 #include "xenia/ui/d3d12/d3d12_api.h"
+#include "xenia/ui/d3d12/pools.h"
 
 DECLARE_bool(d3d12_16bit_rtv_full_range);
 
@@ -301,6 +302,11 @@ class RenderTargetCache {
                ? DXGI_FORMAT_D32_FLOAT_S8X24_UINT
                : DXGI_FORMAT_D24_UNORM_S8_UINT;
   }
+
+  // Returns true if any downloads were submitted to the command processor.
+  bool InitializeTraceSubmitDownloads();
+  void InitializeTraceCompleteDownloads();
+  void RestoreEDRAMSnapshot(const void* snapshot);
 
  private:
   enum class EDRAMLoadStoreMode {
@@ -674,6 +680,11 @@ class RenderTargetCache {
 #else
   std::unordered_map<uint32_t, ResolveTarget*> resolve_targets_;
 #endif
+
+  // For traces only.
+  ID3D12Resource* edram_snapshot_download_buffer_ = nullptr;
+  std::unique_ptr<ui::d3d12::UploadBufferPool> edram_snapshot_restore_pool_ =
+      nullptr;
 };
 
 }  // namespace d3d12
