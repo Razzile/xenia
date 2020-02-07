@@ -24,7 +24,7 @@ class Themeable : public T {
   }
 
   void ApplyTheme(const QString& theme_name) {
-    if (theme_name != QString::null) {
+    if (!theme_name.isNull()) {
       setObjectName(theme_name);
     }
 
@@ -33,7 +33,7 @@ class Themeable : public T {
 
     QString style = theme.StylesheetForComponent(theme_name);
     QString base_style = manager.base_style();
-    if (style != QString::null) {
+    if (!style.isNull()) {
       setStyleSheet(base_style + style);
     }
   };
