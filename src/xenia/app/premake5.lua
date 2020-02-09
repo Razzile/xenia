@@ -70,13 +70,20 @@ project("xenia-app")
       "xcb",
       "X11-xcb",
       "vulkan",
+      "SDL2",
     })
 
   filter("platforms:Windows")
     links({
+      "delayimp", -- This library implements delayed loading on Windows, an MSVC exclusive feature.
       "xenia-apu-xaudio2",
       "xenia-hid-winkey",
       "xenia-hid-xinput",
+    })
+
+  filter("platforms:Windows")
+    linkoptions({
+      "/DELAYLOAD:SDL2.dll",  -- SDL is not mandatory on Windows, implementations using native APIs are prefered.
     })
 
   filter("platforms:Windows")
