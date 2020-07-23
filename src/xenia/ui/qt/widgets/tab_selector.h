@@ -31,7 +31,7 @@ class XTabSelector : public Themeable<QWidget> {
     Rebuild();
   }
   void removeTab(XTab* tab) {
-    std::remove(tabs_.begin(), tabs_.end(), tab);
+    tabs_.erase(std::remove(tabs_.begin(), tabs_.end(), tab), tabs_.end());  
     Rebuild();
   }
   XTab* getActiveTab() const { return active_tab_; }

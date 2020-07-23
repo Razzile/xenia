@@ -23,6 +23,9 @@
 #include <QFontDatabase>
 #include <QtPlugin>
 
+#include "xenia/base/logging.h"
+#include "xenia/config.h"
+
 #if XE_PLATFORM_WIN32 && QT_STATIC
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 #endif
@@ -30,6 +33,17 @@ Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 DEFINE_bool(mount_scratch, false, "Enable scratch mount", "General");
 DEFINE_bool(mount_cache, false, "Enable cache mount", "General");
 DEFINE_bool(show_debug_tab, true, "Show the debug tab in the Qt UI", "General");
+DEFINE_string(
+    storage_root, "",
+    "Root path for persistent internal data storage (config, etc.), or empty "
+    "to use the path preferred for the OS, such as the documents folder, or "
+    "the emulator executable directory if portable.txt is present in it.",
+    "Storage");
+DEFINE_string(
+    content_root, "",
+    "Root path for guest content storage (saves, etc.), or empty to use the "
+    "content folder under the storage root.",
+    "Storage");
 
 namespace xe {
 namespace app {
@@ -40,9 +54,7 @@ int xenia_main(const std::vector<std::wstring>& args) {
 
   // auto emulator = std::make_unique<xe::Emulator>(L"");
 
-#ifdef DEBUG
   qputenv("QT_SCALE_FACTOR", "0.75");
-#endif
 
   // Start Qt
   QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
@@ -51,6 +63,24 @@ int xenia_main(const std::vector<std::wstring>& args) {
   QCoreApplication::setOrganizationName(
       "Xenia Xbox 360 Emulator Research Project");
   QCoreApplication::setOrganizationDomain("https://xenia.jp");
+
+  std::wstring storage_root = xe::to_wstring(cvars::storage_root);
+  if (storage_root.empty()) {
+    storage_root = xe::filesystem::GetExecutableFolder();
+    if (!xe::filesystem::PathExists(xe::format_string(L"%S/%S", storage_root.c_str(), "portable.txt"))) {
+      storage_root = xe::filesystem::GetUserFolder();
+#if defined(XE_PLATFORM_WIN32) || defined(XE_PLATFORM_LINUX)
+      storage_root = storage_root + L"/Xenia";
+#else
+#warning Unhandled platform for the data root.
+      storage_root = storage_root + L"/Xenia";
+#endif
+    }
+  }
+  storage_root = xe::fix_path_separators(storage_root);
+  XELOGI("Storage root: %S", storage_root.c_str());
+
+  config::SetupConfig(storage_root);
 
   int argc = 1;
   char* argv[] = {"xenia", nullptr};

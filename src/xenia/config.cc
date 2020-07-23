@@ -6,6 +6,8 @@
 #include "xenia/base/string.h"
 
 CmdVar(config, "", "Specifies the target config to load.");
+
+namespace xe {
 namespace config {
 std::wstring config_name = L"xenia.config.toml";
 std::wstring config_folder;
@@ -122,5 +124,6 @@ void LoadGameConfig(const std::wstring& title_id) {
     ReadGameConfig(game_config_path);
   }
 }
-
 }  // namespace config
+
+}  // namespace xe
