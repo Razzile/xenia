@@ -1,90 +1,99 @@
 #include "general_pane.h"
+
 #include <QLabel>
 #include <QVBoxLayout>
+
 #include "xenia/ui/qt/widgets/checkbox.h"
 #include "xenia/ui/qt/widgets/combobox.h"
 #include "xenia/ui/qt/widgets/groupbox.h"
 #include "xenia/ui/qt/widgets/scroll_area.h"
 
-namespace xe {
-namespace ui {
-namespace qt {
+DECLARE_bool(show_debug_tab)
 
-const QStringList game_languages = {
-    "English", "Japanese", "German",  "French",    "Spanish",
-    "Italian", "Korean",   "Chinese", "Portugese", "Polish",
-    "Russian", "Swedish",  "Turkish", "Norwegian", "Dutch"};
+    namespace xe {
+  namespace ui {
+  namespace qt {
 
-void GeneralPane::Build() {
-  QWidget* base_widget = new QWidget();
-  base_widget->setSizePolicy(QSizePolicy::MinimumExpanding,
-                             QSizePolicy::MinimumExpanding);
+  const QStringList game_languages = {
+      "English", "Japanese", "German",  "French",    "Spanish",
+      "Italian", "Korean",   "Chinese", "Portugese", "Polish",
+      "Russian", "Swedish",  "Turkish", "Norwegian", "Dutch"};
 
-  // Setup scroll area for settings pane
-  XScrollArea* scroll_area = new XScrollArea(this);
-  scroll_area->setWidget(base_widget);
-  scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  scroll_area->setWidgetResizable(true);
+  void GeneralPane::Build() {
+    QWidget* base_widget = new QWidget();
+    base_widget->setSizePolicy(QSizePolicy::MinimumExpanding,
+                               QSizePolicy::MinimumExpanding);
 
-  QVBoxLayout* layout = new QVBoxLayout();
-  base_widget->setLayout(layout);
+    // Setup scroll area for settings pane
+    XScrollArea* scroll_area = new XScrollArea(this);
+    scroll_area->setWidget(base_widget);
+    scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area->setWidgetResizable(true);
 
-  layout->setSpacing(16);
-  layout->setContentsMargins(32, 16, 32, 16);
+    QVBoxLayout* layout = new QVBoxLayout();
+    base_widget->setLayout(layout);
 
-  // Add settings groupboxes to layout
-  layout->addWidget(CreateGeneralGroupBox());
-  layout->addWidget(CreateUpdateGroupBox());
-  layout->addWidget(CreateWindowGroupBox());
-  layout->addWidget(CreateLogGroupBox());
-  layout->addStretch();
+    layout->setSpacing(16);
+    layout->setContentsMargins(32, 16, 32, 16);
 
-  set_widget(scroll_area);
-}
+    // Add settings groupboxes to layout
+    layout->addWidget(CreateGeneralGroupBox());
+    layout->addWidget(CreateUpdateGroupBox());
+    layout->addWidget(CreateWindowGroupBox());
+    layout->addWidget(CreateLogGroupBox());
+    layout->addStretch();
 
-XGroupBox* GeneralPane::CreateGeneralGroupBox() {
-  XGroupBox* groupbox = new XGroupBox("General Settings");
+    set_widget(scroll_area);
+  }
 
-  QVBoxLayout* groupbox_layout = new QVBoxLayout();
-  groupbox_layout->setContentsMargins(16, 16, 16, 16);
-  groupbox->setLayout(groupbox_layout);
+  XGroupBox* GeneralPane::CreateGeneralGroupBox() {
+    XGroupBox* groupbox = new XGroupBox("General Settings");
 
-  XCheckBox* discord_presence_checkbox = new XCheckBox();
-  discord_presence_checkbox->setText("Discord Rich Presence");
-  groupbox_layout->addWidget(discord_presence_checkbox);
+    QVBoxLayout* groupbox_layout = new QVBoxLayout();
+    groupbox_layout->setContentsMargins(16, 16, 16, 16);
+    groupbox->setLayout(groupbox_layout);
 
-  XCheckBox* game_icon_checkbox = new XCheckBox();
-  game_icon_checkbox->setText("Show Game Icon in Taskbar");
-  groupbox_layout->addWidget(game_icon_checkbox);
+    XCheckBox* discord_presence_checkbox = new XCheckBox();
+    discord_presence_checkbox->setText("Discord Rich Presence");
 
-  QHBoxLayout* game_language_layout = new QHBoxLayout();
-  game_language_layout->setContentsMargins(0, 0, 0, 0);
-  game_language_layout->setSpacing(16);
+    connect(discord_presence_checkbox, &XCheckBox::stateChanged,
+            [&](bool value) {
+              update_config_var(cvars::cv_show_debug_tab, value);
+            });
+    groupbox_layout->addWidget(discord_presence_checkbox);
 
-  QLabel* game_language_label = new QLabel("Game Language");
-  XComboBox* game_language_combobox = new XComboBox();
-  game_language_combobox->addItems(game_languages);
+    XCheckBox* game_icon_checkbox = new XCheckBox();
+    game_icon_checkbox->setText("Show Game Icon in Taskbar");
+    groupbox_layout->addWidget(game_icon_checkbox);
 
-  game_language_layout->addWidget(game_language_label);
-  game_language_layout->addWidget(game_language_combobox);
-  game_language_layout->addStretch();
+    QHBoxLayout* game_language_layout = new QHBoxLayout();
+    game_language_layout->setContentsMargins(0, 0, 0, 0);
+    game_language_layout->setSpacing(16);
 
-  groupbox_layout->addLayout(game_language_layout);
+    QLabel* game_language_label = new QLabel("Game Language");
+    XComboBox* game_language_combobox = new XComboBox();
+    game_language_combobox->addItems(game_languages);
 
-  return groupbox;
-}
+    game_language_layout->addWidget(game_language_label);
+    game_language_layout->addWidget(game_language_combobox);
+    game_language_layout->addStretch();
 
-XGroupBox* GeneralPane::CreateUpdateGroupBox() {
-  return new XGroupBox("Update Settings");
-}
+    groupbox_layout->addLayout(game_language_layout);
 
-XGroupBox* GeneralPane::CreateWindowGroupBox() {
-  return new XGroupBox("Window Settings");
-}
+    return groupbox;
+  }
 
-XGroupBox* GeneralPane::CreateLogGroupBox() {
-  return new XGroupBox("Log Settings");
-}
+  XGroupBox* GeneralPane::CreateUpdateGroupBox() {
+    return new XGroupBox("Update Settings");
+  }
+
+  XGroupBox* GeneralPane::CreateWindowGroupBox() {
+    return new XGroupBox("Window Settings");
+  }
+
+  XGroupBox* GeneralPane::CreateLogGroupBox() {
+    return new XGroupBox("Log Settings");
+  }
 
 }  // namespace qt
 }  // namespace ui
