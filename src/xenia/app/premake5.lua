@@ -1,5 +1,6 @@
 project_root = "../../.."
 include(project_root.."/tools/build")
+local qt = premake.extensions.qt
 
 group("src")
 project("xenia-app")
@@ -37,15 +38,97 @@ project("xenia-app")
     "xenia-hid-sdl",
     "xenia-kernel",
     "xenia-ui",
+    "xenia-ui-qt",
     "xenia-ui-spirv",
     "xenia-ui-vk",
     "xenia-ui-vulkan",
     "xenia-vfs",
     "xxhash",
   })
+
+  -- Setup Qt libraries
+  qt.enable()
+  qtmodules{"core", "gui", "widgets"}
+  qtprefix "Qt5"
+  configuration {"Checked"}
+  qtsuffix "d"
+  configuration {"Debug"}
+  qtsuffix "d"
+  configuration {}
+  if qt.defaultpath ~= nil then
+    qtpath(qt.defaultpath)
+  end
+
+  -- Qt static configuration (if necessary). Used by AppVeyor.
+  if os.getenv("QT_STATIC") then
+    qt.modules["AccessibilitySupport"] = {
+      name = "AccessibilitySupport",
+      include = "QtAccessibilitySupport",
+    }
+    qt.modules["EventDispatcherSupport"] = {
+      name = "EventDispatcherSupport",
+      include = "QtEventDispatcherSupport",
+    }
+    qt.modules["FontDatabaseSupport"] = {
+      name = "FontDatabaseSupport",
+      include = "QtFontDatabaseSupport",
+    }
+    qt.modules["ThemeSupport"] = {
+      name = "ThemeSupport",
+      include = "QtThemeSupport",
+    }
+    qt.modules["VulkanSupport"] = {
+      name = "VulkanSupport",
+      include = "QtVulkanSupport",
+    }
+
+    defines({"QT_STATIC=1"})
+
+    configuration {"not Checked"}
+      links({
+        "qtmain",
+        "qtfreetype",
+        "qtlibpng",
+        "qtpcre2",
+        "qtharfbuzz",
+      })
+    configuration {"Checked"}
+      links({
+        "qtmaind",
+        "qtfreetyped",
+        "qtlibpngd",
+        "qtpcre2d",
+        "qtharfbuzzd",
+      })
+    configuration {}
+    qtmodules{"AccessibilitySupport", "EventDispatcherSupport", "FontDatabaseSupport", "ThemeSupport", "VulkanSupport"}
+    libdirs("%{cfg.qtpath}/plugins/platforms")
+
+    filter("platforms:Windows")
+      -- Qt dependencies
+      links({
+        "dwmapi",
+        "version",
+        "imm32",
+        "winmm",
+        "netapi32",
+        "userenv",
+      })
+      configuration {"not Checked"}
+        links({"qwindows"})
+      configuration {"Checked"}
+        links({"qwindowsd"})
+      configuration {}
+    filter()
+  end
+
+ filter("platforms:Windows")
+  entrypoint("mainCRTStartup")
+
   defines({
     "XBYAK_NO_OP_NAMES",
     "XBYAK_ENABLE_OMITTED_OPERAND",
+    "XE_COMPILE_QT"
   })
   local_platform_files()
   files({

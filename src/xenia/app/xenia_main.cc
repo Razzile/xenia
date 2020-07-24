@@ -44,7 +44,14 @@
 #include "xenia/hid/xinput/xinput_hid.h"
 #endif  // XE_PLATFORM_WIN32
 
+#ifdef XE_COMPILE_QT
+#include <QApplication>
+#include <QFontDatabase>
+#include <QtPlugin>
+#endif
+
 #include "third_party/xbyak/xbyak/xbyak_util.h"
+#include "xenia/ui/qt/main_window.h"
 
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, sdl, xaudio2]", "APU");
 DEFINE_string(gpu, "any",
@@ -369,7 +376,7 @@ int RunLegacyInterface(const std::vector<std::wstring>& args, const std::wstring
 
 int RunQtInterface(const std::vector<std::wstring>& args) {
   // Start Qt
-  #if XE_COMPILE_QT
+  #ifdef XE_COMPILE_QT
   QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
   QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
   QCoreApplication::setApplicationName("Xenia");
