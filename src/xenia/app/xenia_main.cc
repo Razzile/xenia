@@ -377,7 +377,7 @@ int RunQtInterface(const std::vector<std::wstring>& args) {
       "Xenia Xbox 360 Emulator Research Project");
   QCoreApplication::setOrganizationDomain("https://xenia.jp");
 
-   int argc = 1;
+  int argc = 1;
   char* argv[] = {"xenia", nullptr};
   QApplication app(argc, argv);
 
