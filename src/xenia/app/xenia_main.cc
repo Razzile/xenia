@@ -67,6 +67,9 @@ DECLARE_bool(debug);
 
 DEFINE_bool(discord, true, "Enable Discord rich presence", "General");
 
+DEFINE_string(user_interface, "any",
+            "User interface implementation. Use [any, qt, legacy]", "UI");
+
 namespace xe {
 namespace app {
 
@@ -174,7 +177,7 @@ std::vector<std::unique_ptr<hid::InputDriver>> CreateInputDrivers(
     ui::Window* window) {
   std::vector<std::unique_ptr<hid::InputDriver>> drivers;
   if (cvars::hid.compare("nop") == 0) {
-    drivers.emplace_back(xe::hid::nop::Create(window));
+    drivers.emplace_back(xe::hid::nop::Create());
   } else {
     Factory<hid::InputDriver, ui::Window*> factory;
 #if XE_PLATFORM_WIN32
@@ -190,66 +193,27 @@ std::vector<std::unique_ptr<hid::InputDriver>> CreateInputDrivers(
     }
     if (drivers.empty()) {
       // Fallback to nop if none created.
-      drivers.emplace_back(xe::hid::nop::Create(window));
+      drivers.emplace_back(xe::hid::nop::Create());
     }
   }
   return drivers;
 }
 
-int xenia_main(const std::vector<std::wstring>& args) {
-  Profiler::Initialize();
-  Profiler::ThreadEnter("main");
-
-  // Figure out where content should go.
-  std::wstring content_root = xe::to_wstring(cvars::content_root);
-  std::wstring config_folder;
-
-  if (content_root.empty()) {
-    auto base_path = xe::filesystem::GetExecutableFolder();
-    base_path = xe::to_absolute_path(base_path);
-
-    auto portable_path = xe::join_paths(base_path, L"portable.txt");
-    if (xe::filesystem::PathExists(portable_path)) {
-      content_root = xe::join_paths(base_path, L"content");
-      config_folder = base_path;
-    } else {
-      content_root = xe::filesystem::GetUserFolder();
-#if defined(XE_PLATFORM_WIN32)
-      content_root = xe::join_paths(content_root, L"Xenia");
-#elif defined(XE_PLATFORM_LINUX)
-      content_root = xe::join_paths(content_root, L"Xenia");
-#else
-#warning Unhandled platform for content root.
-      content_root = xe::join_paths(content_root, L"Xenia");
-#endif
-      config_folder = content_root;
-      content_root = xe::join_paths(content_root, L"content");
-    }
-  }
-  content_root = xe::to_absolute_path(content_root);
-
-  XELOGI("Content root: %S", content_root.c_str());
-  config::SetupConfig(config_folder);
-
-  if (cvars::discord) {
-    discord::DiscordPresence::Initialize();
-    discord::DiscordPresence::NotPlaying();
-  }
-
+int RunLegacyInterface(const std::vector<std::wstring>& args, const std::wstring& content_root) {
+  // Setup and initialize all subsystems. If we can't do something
+  // (unsupported system, memory issues, etc) this will fail early.
+  
   // Create the emulator but don't initialize so we can setup the window.
   auto emulator = std::make_unique<Emulator>(L"", content_root);
 
   // Main emulator display window.
   auto emulator_window = EmulatorWindow::Create(emulator.get());
 
-  // Setup and initialize all subsystems. If we can't do something
-  // (unsupported system, memory issues, etc) this will fail early.
   X_STATUS result =
       emulator->Setup(emulator_window->window(), CreateAudioSystem,
                       CreateGraphicsSystem, CreateInputDrivers);
   if (XFAILED(result)) {
-    XELOGE("Failed to setup emulator: %.8X", result);
-    return 1;
+    FatalError("Failed to setup emulator: %.8X", result);
   }
 
   if (cvars::mount_scratch) {
@@ -399,7 +363,90 @@ int xenia_main(const std::vector<std::wstring>& args) {
   Profiler::Dump();
   Profiler::Shutdown();
   emulator_window.reset();
+
   return 0;
+}
+
+int RunQtInterface(const std::vector<std::wstring>& args) {
+  // Start Qt
+  #if XE_COMPILE_QT
+  QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+  QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+  QCoreApplication::setApplicationName("Xenia");
+  QCoreApplication::setOrganizationName(
+      "Xenia Xbox 360 Emulator Research Project");
+  QCoreApplication::setOrganizationDomain("https://xenia.jp");
+
+   int argc = 1;
+  char* argv[] = {"xenia", nullptr};
+  QApplication app(argc, argv);
+
+  // Load Fonts
+  QFontDatabase fonts;
+  fonts.addApplicationFont(":/resources/fonts/SegMDL2.ttf");
+  fonts.addApplicationFont(":/resources/fonts/segoeui.ttf");
+  fonts.addApplicationFont(":/resources/fonts/segoeuisb.ttf");
+  QApplication::setFont(QFont("Segoe UI"));
+
+  // EmulatorWindow main_wnd;
+  ui::qt::MainWindow main_wnd;
+  main_wnd.setWindowIcon(QIcon(":/resources/graphics/icon.ico"));
+  main_wnd.resize(1280, 720);
+
+  main_wnd.show();
+
+  return app.exec();
+  #else
+#warning "Build is not targeting Qt"
+  return 1;
+  #endif
+}
+
+int xenia_main(const std::vector<std::wstring>& args) {
+  Profiler::Initialize();
+  Profiler::ThreadEnter("main");
+
+  // Figure out where content should go.
+  std::wstring content_root = xe::to_wstring(cvars::content_root);
+  std::wstring config_folder;
+
+  if (content_root.empty()) {
+    auto base_path = xe::filesystem::GetExecutableFolder();
+    base_path = xe::to_absolute_path(base_path);
+
+    auto portable_path = xe::join_paths(base_path, L"portable.txt");
+    if (xe::filesystem::PathExists(portable_path)) {
+      content_root = xe::join_paths(base_path, L"content");
+      config_folder = base_path;
+    } else {
+      content_root = xe::filesystem::GetUserFolder();
+#if defined(XE_PLATFORM_WIN32)
+      content_root = xe::join_paths(content_root, L"Xenia");
+#elif defined(XE_PLATFORM_LINUX)
+      content_root = xe::join_paths(content_root, L"Xenia");
+#else
+#warning Unhandled platform for content root.
+      content_root = xe::join_paths(content_root, L"Xenia");
+#endif
+      config_folder = content_root;
+      content_root = xe::join_paths(content_root, L"content");
+    }
+  }
+  content_root = xe::to_absolute_path(content_root);
+
+  XELOGI("Content root: %S", content_root.c_str());
+  config::SetupConfig(config_folder);
+
+  if (cvars::discord) {
+    discord::DiscordPresence::Initialize();
+    discord::DiscordPresence::NotPlaying();
+  }
+
+  if (cvars::user_interface == "legacy") {
+    return RunLegacyInterface(args, content_root);
+  } else {
+    return RunQtInterface(args);
+  }
 }
 
 }  // namespace app
