@@ -1,0 +1,17 @@
+QTableView#XTableView {
+  color: $primary;
+  background-color: $background;
+}
+
+QTableView#XTableView::item {
+  background-color: #232323;
+  font-size: 12px;
+}
+
+QTableView#XTableView::item::selected {
+  background-color: #4aa971;
+}
+
+QTableView#XTableView::header {
+  background-color: #373737;
+}

@@ -1,0 +1,8 @@
+QScrollArea#XScrollArea { 
+    background: transparent; 
+    border: none;
+  }
+  
+QScrollArea#XScrollArea > QWidget > QWidget { 
+    background: transparent; 
+  }

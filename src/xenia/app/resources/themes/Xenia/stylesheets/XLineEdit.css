@@ -1,0 +1,14 @@
+QLineEdit#XLineEdit {
+    background-color: $dark1;
+    color: $primary;
+    border: 2px solid $light3;
+}
+
+QLineEdit#XLineEdit:focus {
+    border: 2px solid $secondaryDark;
+}
+
+QLineEdit#XLineEdit:disabled {
+    color: $light2;
+    border: 2px solid $dark1;
+}

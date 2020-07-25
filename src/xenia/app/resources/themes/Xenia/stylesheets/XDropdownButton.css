@@ -1,0 +1,51 @@
+QToolButton#XDropdownButton {
+  background: $dark1;
+  color: $primary;
+  border: 2px solid $light3;
+  padding: 4px;
+}
+
+QToolButton#XDropdownButton:disabled {
+  background: $light3;
+  color: $dark1;
+  border: none;
+}
+
+QToolButton#XDropdownButton:hover:!pressed,
+QToolButton#XDropdownButton:focus {
+  border: 2px solid $secondaryDark;
+  outline: none;
+}
+
+QToolButton#XDropdownButton:pressed {
+  background: $secondaryDark;
+  border: none;
+}
+
+QToolButton#XDropdownButton[popupMode="1"] {
+  padding-right: 15px;
+}
+
+QToolButton#XDropdownButton::menu-button {
+  width: 15px;
+  margin: 2px;
+  background: $dark2;
+  border: none;
+}
+
+QToolButton#XDropdownButton:disabled,
+QToolButton#XDropdownButton::menu-button {
+  width: 15px;
+  margin: 2px;
+  background: $light3;
+  border: none;
+}
+
+QToolButton#XDropdownButton::menu-button:pressed {
+  background: $secondaryDark;
+}
+
+QToolButton#XDropdownButton::menu-arrow:open {
+  top: -1px;
+  left: -1px;
+}

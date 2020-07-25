@@ -48,6 +48,7 @@ dword_result_t XamShowNuiTroubleshooterUI(unknown_t unk1, unknown_t unk2,
     return 0;
   }
 
+  /**
   auto display_window = kernel_state()->emulator()->display_window();
   xe::threading::Fence fence;
   display_window->loop()->PostSynchronous([&]() {
@@ -59,6 +60,7 @@ dword_result_t XamShowNuiTroubleshooterUI(unknown_t unk1, unknown_t unk2,
   ++xam_dialogs_shown_;
   fence.Wait();
   --xam_dialogs_shown_;
+  */
 
   return 0;
 }

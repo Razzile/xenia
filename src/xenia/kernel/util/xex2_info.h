@@ -473,6 +473,11 @@ struct xex2_opt_execution_info {
 };
 static_assert_size(xex2_opt_execution_info, 0x18);
 
+struct xex2_multi_disc_media_id_t {
+  char hash[12];
+  uint32_t media_id;
+};
+
 struct xex2_opt_import_libraries {
   xe::be<uint32_t> size;  // 0x0
   struct {

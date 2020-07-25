@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include <vector>
 #include "xenia/ui/vulkan/vulkan.h"
 
 namespace xe {

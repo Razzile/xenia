@@ -1,0 +1,110 @@
+QMainWindow {
+  background-color: $background;
+}
+
+QLabel#buildLabel {
+  color: $light2;
+  padding: 0px 4px 0px 4px;
+  font-size: 10px;
+}
+
+QMenu {
+  background-color: $dark1;
+  border: 1px solid $light3;
+}
+
+QMenu::item {
+  background-color: transparent;
+  color: $primary;
+}
+
+QMenu::item:selected {
+  background-color: $secondaryDark;
+}
+
+/* Global Scrollbar theming */
+
+QScrollBar:horizontal {
+  background: $dark2;
+  height: 15px;
+  margin: 0px 20px 0 20px;
+}
+
+QScrollBar::handle:horizontal {
+  background: $dark1;
+  min-width: 20px;
+}
+
+QScrollBar::add-line:horizontal {
+  background: $dark2;
+  width: 20px;
+  subcontrol-position: right;
+  subcontrol-origin: margin;
+}
+
+QScrollBar::sub-line:horizontal {
+  background: $dark2;
+  width: 20px; 
+  subcontrol-position: left;
+  subcontrol-origin: margin;
+}
+
+QScrollBar::add-page:horizontal, 
+QScrollBar::sub-page:horizontal {
+  background: none;
+}
+
+QScrollBar::left-arrow:horizontal {
+  image: url(:/resources/graphics/left-arrow.png);
+  width: 8px;
+  height: 8px;
+}
+
+QScrollBar::right-arrow:horizontal {
+  image: url(:/resources/graphics/right-arrow.png);
+  width: 8px;
+  height: 8px;
+}
+
+QScrollBar:vertical {
+  background: $dark2;
+  width: 15px;
+  margin: 20px 0 20px 0;
+}
+
+QScrollBar::handle:vertical {
+  background: $dark1;
+  min-height: 20px;
+}
+
+QScrollBar::add-line:vertical {
+  background: $dark2;
+  height: 20px;
+  subcontrol-position: top;
+  subcontrol-origin: margin;
+}
+
+QScrollBar::sub-line:vertical {
+  background: $dark2;
+  height: 20px; 
+  subcontrol-position: bottom;
+  subcontrol-origin: margin;
+}
+
+QScrollBar::add-page:vertical, 
+QScrollBar::sub-page:vertical {
+  background: $dark2;
+}
+
+/* up and down are inversed here for some reason */
+QScrollBar::up-arrow:vertical {
+  image: url(:/resources/graphics/down-arrow.png);
+  width: 8px;
+  height: 8px;
+}
+
+QScrollBar::down-arrow:vertical {
+  image: url(:/resources/graphics/up-arrow.png);
+  width: 8px;
+  height: 8px;
+}

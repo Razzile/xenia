@@ -1,0 +1,18 @@
+QWidget#XCard {
+  background: $dark2;
+  border-top-right-radius: 2px;
+  border-top-left-radius: 2px;
+}
+
+QLabel {
+  color: $light1;
+}
+
+QListWidget {
+  background: transparent;
+  border: none;
+}
+QListWidget::item {
+  background: transparent;
+  border: none;
+}

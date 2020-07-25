@@ -1,0 +1,30 @@
+QWidget#DebugTab QLabel {
+  color: $primary;
+}
+
+QWidget#DebugTab QScrollArea { 
+  background: transparent; 
+  border: none;
+}
+QWidget#DebugTab QScrollArea > QWidget > QWidget { 
+  background: transparent; 
+}
+
+QWidget#sidebarContainer {
+  background: $tertiary;
+  min-width: 300px;
+  max-width: 300px;
+}
+
+QWidget#sidebarTitleLabel {
+  color: $primary;
+  font-size: 32px;
+}
+
+QWidget#sidebarTitle #XSeperator {
+  background: $dark1;
+}
+
+QWidget#navigationContainer {
+  background: $dark2;
+}

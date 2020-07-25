@@ -1,0 +1,4 @@
+QStatusBar#XStatusBar {
+  background: rgb(40, 40, 40);
+  color: $light2;
+}

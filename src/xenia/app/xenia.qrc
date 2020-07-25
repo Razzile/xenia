@@ -1,0 +1,40 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/graphics/icon.ico</file>
+        <file>resources/graphics/GameIconMask.png</file>
+        <file>resources/graphics/down-arrow.png</file>
+        <file>resources/graphics/left-arrow.png</file>
+        <file>resources/graphics/right-arrow.png</file>
+        <file>resources/graphics/up-arrow.png</file>
+        <file>resources/fonts/SegMDL2.ttf</file>
+        <file>resources/fonts/segoeui.ttf</file>
+        <file>resources/fonts/segoeuisb.ttf</file>
+        <file>resources/themes/base.css</file>
+        <file>resources/themes/Xenia/theme.json</file>
+        <file>resources/themes/Xenia/stylesheets/MainWindow.css</file>
+        <file>resources/themes/Xenia/stylesheets/XNav.css</file>
+        <file>resources/themes/Xenia/stylesheets/XTab.css</file>
+        <file>resources/themes/Xenia/stylesheets/XTabSelector.css</file>
+        <file>resources/themes/Xenia/stylesheets/XTableView.css</file>
+        <file>resources/themes/Xenia/stylesheets/XTableHeader.css</file>
+        <file>resources/themes/Xenia/stylesheets/XSlider.css</file>
+        <file>resources/themes/Xenia/stylesheets/XToolBar.css</file>
+        <file>resources/themes/Xenia/stylesheets/XToolBarItem.css</file>
+        <file>resources/themes/Xenia/stylesheets/HomeTab.css</file>
+        <file>resources/themes/Xenia/stylesheets/XSideBarButton.css</file>
+        <file>resources/themes/Xenia/stylesheets/XSideBar.css</file>
+        <file>resources/themes/Xenia/stylesheets/XStatusBar.css</file>
+        <file>resources/themes/Xenia/stylesheets/XCard.css</file>
+        <file>resources/themes/Xenia/stylesheets/XGroupBox.css</file>
+        <file>resources/themes/Xenia/stylesheets/XPushButton.css</file>
+        <file>resources/themes/Xenia/stylesheets/XDropdownButton.css</file>
+        <file>resources/themes/Xenia/stylesheets/XRadioButton.css</file>
+        <file>resources/themes/Xenia/stylesheets/XCheckBox.css</file>
+        <file>resources/themes/Xenia/stylesheets/DebugTab.css</file>
+        <file>resources/themes/Xenia/stylesheets/XComboBox.css</file>
+        <file>resources/themes/Xenia/stylesheets/XTextEdit.css</file>
+        <file>resources/themes/Xenia/stylesheets/XLineEdit.css</file>
+        <file>resources/themes/Xenia/stylesheets/SettingsTab.css</file>
+        <file>resources/themes/Xenia/stylesheets/XScrollArea.css</file>
+    </qresource>
+</RCC>

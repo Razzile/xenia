@@ -1,0 +1,15 @@
+/*
+for some reason QSS property values take priority over calling the setter of the property programatically
+to work around this users can set the custom property to true before calling any setters
+*/
+QCheckBox#XCheckBox[custom="false"] {
+  qproperty-checked_color: $secondary;
+}
+
+/*
+these two properties cannot be changed programatically, to allow this move them into the above style
+*/
+QCheckBox#XCheckBox {
+  qproperty-border_color: $light2;
+  qproperty-focus_color: $secondary;
+}

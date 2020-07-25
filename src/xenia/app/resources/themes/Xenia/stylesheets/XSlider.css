@@ -1,0 +1,68 @@
+QSlider#XSlider:horizontal {
+  min-width: 20px;
+  min-height: 20px;
+}
+
+QSlider#XSlider::groove:horizontal {
+  background: $secondaryDark;
+  height: 4px;
+  margin: 0px 1px 0px 1px;
+}
+
+QSlider#XSlider::handle:horizontal {
+  width: 10px;
+  border-radius: 5px;
+  background: $secondary;
+  margin: -3px -1px -3px -1px;
+}
+
+QSlider#XSlider::handle:horizontal:focus {
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  border-radius: 7px;
+  background: $secondary;
+  margin: -5px -1px -5px -1px;
+}
+
+QSlider#XSlider::groove:vertical {
+  background: $secondaryDark;
+  width: 4px;
+  margin: 1px 0px 1px 0px;
+}
+
+QSlider#XSlider::handle:vertical {
+  height: 10px;
+  border-radius: 5px;
+  background: $secondary;
+  margin: -1px -3px -1px -3px;
+}
+
+QSlider#XSlider::handle:vertical:focus {
+  height: 14px;
+  border-radius: 7px;
+  background: $secondary;
+  margin: -1px -5px -1px -5px;
+}
+
+/* Uncomment these to make slider color different before the handle to after */
+
+QSlider#XSlider::sub-page:horizontal {
+  background: $secondaryDark;
+  margin: 0px 1px 0px 1px;
+}
+
+QSlider#XSlider::add-page:horizontal {
+  background: $light3;
+  margin: 0px 1px 0px 1px;
+}
+
+QSlider#XSlider::add-page:vertical {
+  background: $secondaryDark;
+  margin: 1px 0px 1px 0px;
+}
+
+QSlider#XSlider::sub-page:vertical {
+  background: $light3;
+  margin: 1px 0px 1px 0px;
+}

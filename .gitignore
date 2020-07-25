@@ -101,3 +101,8 @@ node_modules/.bin/
 /third_party/binutils/binutils*
 /third_party/vasm/
 /tools/shader-playground/*.dll
+
+# ==============================================================================
+# Uncooked Resources
+# ==============================================================================
+*.psd

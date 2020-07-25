@@ -1,0 +1,17 @@
+QPushButton {
+  color: $primary;
+  border: none;
+  background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+  background-color: $dark1;
+}
+
+QPushButton:pressed {
+  background-color: $dark2;
+}
+
+QPushButton:checked {
+  background-color: $dark2;
+}

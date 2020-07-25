@@ -219,8 +219,8 @@ int xenia_main(const std::vector<std::wstring>& args) {
 #elif defined(XE_PLATFORM_LINUX)
       content_root = xe::join_paths(content_root, L"Xenia");
 #else
-#warning Unhandled platform for content root.
-      content_root = xe::join_paths(content_root, L"Xenia");
+#warning Unhandled platform for the data root.
+      storage_root = storage_root + L"/Xenia";
 #endif
       config_folder = content_root;
       content_root = xe::join_paths(content_root, L"content");
@@ -236,21 +236,23 @@ int xenia_main(const std::vector<std::wstring>& args) {
     discord::DiscordPresence::NotPlaying();
   }
 
-  // Create the emulator but don't initialize so we can setup the window.
-  auto emulator = std::make_unique<Emulator>(L"", content_root);
+  config::SetupConfig(storage_root);
 
-  // Main emulator display window.
-  auto emulator_window = EmulatorWindow::Create(emulator.get());
+  int argc = 1;
+  char* argv[] = {"xenia", nullptr};
+  QApplication app(argc, argv);
 
-  // Setup and initialize all subsystems. If we can't do something
-  // (unsupported system, memory issues, etc) this will fail early.
-  X_STATUS result =
-      emulator->Setup(emulator_window->window(), CreateAudioSystem,
-                      CreateGraphicsSystem, CreateInputDrivers);
-  if (XFAILED(result)) {
-    XELOGE("Failed to setup emulator: %.8X", result);
-    return 1;
-  }
+  // Load Fonts
+  QFontDatabase fonts;
+  fonts.addApplicationFont(":/resources/fonts/SegMDL2.ttf");
+  fonts.addApplicationFont(":/resources/fonts/segoeui.ttf");
+  fonts.addApplicationFont(":/resources/fonts/segoeuisb.ttf");
+  QApplication::setFont(QFont("Segoe UI"));
+
+  // EmulatorWindow main_wnd;
+  ui::qt::MainWindow main_wnd;
+  main_wnd.setWindowIcon(QIcon(":/resources/graphics/icon.ico"));
+  main_wnd.resize(1280, 720);
 
   if (cvars::mount_scratch) {
     auto scratch_device = std::make_unique<xe::vfs::HostPathDevice>(
@@ -314,6 +316,7 @@ int xenia_main(const std::vector<std::wstring>& args) {
           return debug_window.get();
         });
   }
+  */
 
   auto evt = xe::threading::Event::CreateAutoResetEvent(false);
   emulator->on_launch.AddListener([&](auto title_id, const auto& game_title) {
@@ -389,8 +392,7 @@ int xenia_main(const std::vector<std::wstring>& args) {
     }
   }
 
-  debug_window.reset();
-  emulator.reset();
+  int rc = app.exec();
 
   if (cvars::discord) {
     discord::DiscordPresence::Shutdown();

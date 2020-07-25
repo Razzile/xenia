@@ -1,0 +1,54 @@
+{
+  "name": "Xenia",
+  "description": "The default xenia theme. This theme is dark and clean",
+  "colors": [
+    {
+      "name": "primary",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "secondary",
+      "value": "#5CE494"
+    },
+    {
+      "name": "secondaryDark",
+      "value": "#4AA971"
+    },
+    {
+      "name": "tertiary",
+      "value": "#232323"
+    },
+    {
+      "name": "background",
+      "value": "#1F1F1F"
+    },
+    {
+      "name": "accent",
+      "value": "#282828"
+    },
+    {
+      "name": "light1",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "light2",
+      "value": "#C7C7C7"
+    },
+    {
+      "name": "light3",
+      "value": "#7F7F7F"
+    },
+    {
+      "name": "dark1",
+      "value": "#505050"
+    },
+    {
+      "name": "dark2",
+      "value": "#373737"
+    },
+    {
+      "name": "dark3",
+      "value": "#1E1E1E"
+    }
+  ]
+}

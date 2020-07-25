@@ -1,0 +1,50 @@
+QComboBox#XComboBox {
+    border: 2px solid $light3;
+    background: $dark2;
+    color: $light2;
+    padding-left: 4px;
+}
+
+QComboBox#XComboBox:pressed,
+QComboBox#XComboBox:hover,
+QComboBox#XComboBox:focus,
+QComboBox#XComboBox:on {
+    border: 2px solid $secondaryDark;
+}
+
+QComboBox#XComboBox::drop-down {
+    border: 0
+}
+
+QComboBox#XComboBox::down-arrow {
+    margin-right: 4px;
+    image: url(:/resources/graphics/down-arrow.png);
+    width: 14px;
+    height: 14px;
+}
+
+QComboBox#XComboBox::item
+{
+     background: $dark2;
+}
+
+QComboBox#XComboBox::item:selected
+{
+     background: $secondaryDark;
+}
+
+QComboBox#XComboBox::item:checked
+{
+     font-weight: bold;
+}
+
+QComboBox#XComboBox QAbstractItemView {
+    background: $dark2;
+    color: $light2;
+    selection-background-color: $secondaryDark;
+    outline: 0;
+}
+
+/* QComboBox#XComboBox QFrame:focus {
+    background: $secondaryDark;
+} */

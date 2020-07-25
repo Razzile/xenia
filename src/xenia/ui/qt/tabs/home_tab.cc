@@ -1,0 +1,254 @@
+#include "xenia/ui/qt/tabs/home_tab.h"
+
+#include <QFIleDialog>
+#include <QGraphicsEffect>
+#include <QProgressBar>
+
+#include "xenia/app/emulator_window.h"
+#include "xenia/base/logging.h"
+#include "xenia/ui/qt/actions/action.h"
+#include "xenia/ui/qt/main_window.h"
+#include "xenia/ui/qt/widgets/separator.h"
+#include "xenia/ui/qt/widgets/slider.h"
+
+namespace xe {
+namespace ui {
+namespace qt {
+
+HomeTab::HomeTab() : XTab("Home", "HomeTab") { Build(); }
+
+void HomeTab::Build() {
+  layout_ = new QHBoxLayout();
+  layout_->setMargin(0);
+  layout_->setSpacing(0);
+  setLayout(layout_);
+
+  BuildSidebar();
+  BuildRecentView();
+}
+
+void HomeTab::BuildSidebar() {
+  // sidebar container widget
+  sidebar_ = new QWidget(this);
+  sidebar_->setObjectName("sidebarContainer");
+
+  QVBoxLayout* sidebar_layout = new QVBoxLayout;
+  sidebar_layout->setMargin(0);
+  sidebar_layout->setSpacing(0);
+
+  sidebar_->setLayout(sidebar_layout);
+
+  // Add drop shadow to sidebar widget
+  QGraphicsDropShadowEffect* effect = new QGraphicsDropShadowEffect;
+  effect->setBlurRadius(16);
+  effect->setXOffset(4);
+  effect->setYOffset(0);
+  effect->setColor(QColor(0, 0, 0, 64));
+
+  sidebar_->setGraphicsEffect(effect);
+
+  // Create sidebar
+  sidebar_toolbar_ = new XSideBar;
+  sidebar_toolbar_->setOrientation(Qt::Vertical);
+  sidebar_toolbar_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+  sidebar_toolbar_->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+
+  // Create sidebar title
+  QWidget* sidebar_title = new QWidget;
+  sidebar_title->setObjectName("sidebarTitle");
+
+  QVBoxLayout* title_layout = new QVBoxLayout;
+  title_layout->setMargin(0);
+  title_layout->setContentsMargins(0, 40, 0, 0);
+  title_layout->setSpacing(0);
+
+  sidebar_title->setLayout(title_layout);
+
+  // Title labels
+  QLabel* xenia_title = new QLabel("Xenia");
+  xenia_title->setObjectName("sidebarTitleLabel");
+
+  QLabel* xenia_subtitle = new QLabel("Xbox 360 Emulator");
+  xenia_subtitle->setObjectName("sidebarSubtitleLabel");
+
+  title_layout->addWidget(xenia_title, 0, Qt::AlignHCenter | Qt::AlignBottom);
+  title_layout->addWidget(xenia_subtitle, 0, Qt::AlignHCenter | Qt::AlignTop);
+
+  // Title separator
+  auto separator = new XSeparator;
+  title_layout->addWidget(separator, 0, Qt::AlignHCenter);
+
+  // Setup Sidebar toolbar
+  sidebar_toolbar_->addWidget(sidebar_title);
+
+  sidebar_toolbar_->addSpacing(20);
+
+  auto open_file_btn = sidebar_toolbar_->addAction(0xE838, "Open File");
+  connect(open_file_btn, &XSideBarButton::clicked, this,
+          &HomeTab::OpenFileTriggered);
+
+  auto import_folder_btn = sidebar_toolbar_->addAction(0xE8F4, "Import Folder");
+  connect(import_folder_btn, &XSideBarButton::clicked, this,
+          &HomeTab::ImportFolderTriggered);
+
+  sidebar_toolbar_->addSeparator();
+
+  sidebar_layout->addWidget(sidebar_toolbar_, 0,
+                            Qt::AlignHCenter | Qt::AlignTop);
+  sidebar_layout->addStretch(1);
+
+  // Add sidebar to tab widget
+  layout_->addWidget(sidebar_, 0, Qt::AlignLeft);
+}
+
+void HomeTab::BuildRecentView() {
+  // Create container widget
+  QWidget* recent_container = new QWidget(this);
+
+  QVBoxLayout* recent_layout = new QVBoxLayout(this);
+  recent_layout->setContentsMargins(0, 0, 0, 0);
+  recent_layout->setSpacing(0);
+
+  recent_container->setLayout(recent_layout);
+
+  // Setup toolbar
+  auto toolbar = recent_toolbar_;
+  toolbar = new XToolBar(this);
+
+  QLabel* title = new QLabel("Recent Games");
+  title->setObjectName("recentGames");
+
+  toolbar->addWidget(title);
+
+  toolbar->addSeparator();
+
+  // TODO: handle button clicks
+  auto play_btn = toolbar->addAction(new XAction(QChar(0xEDB5), "Play"));
+  connect(play_btn, &XToolBarItem::clicked, [this]() { PlayTriggered(); });
+
+  toolbar->addAction(new XAction(QChar(0xEBE8), "Debug"));
+  toolbar->addAction(new XAction(QChar(0xE946), "Info"));
+
+  toolbar->addSeparator();
+
+  toolbar->addAction(new XAction(QChar(0xE8FD), "List"));
+  toolbar->addAction(new XAction(QChar(0xF0E2), "Grid"));
+
+  // TODO: hide slider unless "Grid" mode is selected
+
+  auto* slider = new XSlider(Qt::Horizontal, this);
+  slider->setRange(48, 96);
+  slider->setFixedWidth(100);
+  toolbar->addWidget(slider);
+
+  recent_layout->addWidget(toolbar);
+
+  // Create recent games list view
+  // TODO: this should only be shown when "List" mode selected in toolbar
+  // and should also only load games from a "recent" cache
+
+  list_view_ = new XGameListView(this);
+  recent_layout->addWidget(list_view_);
+
+  layout_->addWidget(recent_container);
+
+  // Lower the widget to prevent overlap with sidebar's shadow
+  recent_container->lower();
+}
+
+void HomeTab::PlayTriggered() {
+  // Get path from table and launch game in new EmulatorWindow
+  // This is purely a proof of concept
+  auto index = list_view_->selectionModel();
+  if (index->hasSelection()) {
+    QModelIndexList row =
+        index->selectedRows(static_cast<int>(GameColumn::kPathColumn));
+    const QModelIndex& model_index = row.at(0);
+
+    QString path = model_index.data().toString();
+
+    app::EmulatorWindow* wnd = new app::EmulatorWindow();
+    wnd->resize(1280, 720);
+    wnd->show();
+
+    // this manual conversion seems to be required as Qt's std::(w)string impl
+    // and the one i've been linking to seem incompatible
+    wchar_t* path_w = new wchar_t[path.length() + 1];
+    path.toWCharArray(path_w);
+    path_w[path.length()] = '\0';
+
+    wnd->Launch(path_w);
+  }
+}
+
+void HomeTab::OpenFileTriggered() {
+  QString file_name = QFileDialog::getOpenFileName(
+      this, "Open Game", "",
+      tr("Xbox 360 Executable (*.xex);;Disc Image (*.iso);;All Files (*)"));
+  if (!file_name.isEmpty()) {
+    // this manual conversion seems to be required as Qt's std::(w)string impl
+    // and the one i've been linking to seem incompatible
+    wchar_t* path_w = new wchar_t[file_name.length() + 1];
+    file_name.toWCharArray(path_w);
+    path_w[file_name.length()] = '\0';
+
+    XGameLibrary* lib = XGameLibrary::Instance();
+    lib->ScanPath(path_w);
+
+    list_view_->RefreshGameList();
+  }
+}
+
+void HomeTab::ImportFolderTriggered() {
+  QString path = QFileDialog::getExistingDirectory(this, "Open Folder", "");
+  if (!path.isEmpty()) {
+    // this manual conversion seems to be required as Qt's std::(w)string impl
+    // and the one i've been linking to seem incompatible
+    wchar_t* path_w = new wchar_t[path.length() + 1];
+    path.toWCharArray(path_w);
+    path_w[path.length()] = '\0';
+
+    QWidget* progress_widget = new QWidget();
+    QHBoxLayout* layout = new QHBoxLayout();
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(16);
+    progress_widget->setLayout(layout);
+
+    QLabel* label = new QLabel("Scanning directories...");
+    label->setStyleSheet("color: #c7c7c7");
+    layout->addWidget(label);
+
+    QProgressBar* bar = new QProgressBar();
+    bar->setFixedSize(120, 16);
+    bar->setRange(0, 100);
+    bar->setValue(0);
+    bar->setTextVisible(false);
+    layout->addWidget(bar);
+
+    layout->addStretch();
+
+    MainWindow* window = qobject_cast<MainWindow*>(this->window());
+    window->AddStatusBarWidget(progress_widget);
+
+    XGameLibrary* lib = XGameLibrary::Instance();
+    lib->ScanPathAsync(path_w, [=](double progress, const XGameEntry& entry) {
+      // update progress bar on main UI thread
+      QMetaObject::invokeMethod(
+          bar,
+          [=]() {
+            bar->setValue(progress);
+            if (progress == 100.0) {
+              window->RemoveStatusBarWidget(progress_widget);
+            }
+          },
+          Qt::QueuedConnection);
+      // Just a PoC. In future change to refresh list
+      // when all games added.
+      list_view_->RefreshGameList();
+    });
+  }
+}
+
+}  // namespace qt
+}  // namespace ui
+}  // namespace xe

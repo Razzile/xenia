@@ -1,0 +1,14 @@
+QPlainTextEdit#XTextEdit {
+    background-color: $dark1;
+    color: $primary;
+    border: 2px solid $light3;
+}
+
+QPlainTextEdit#XTextEdit:focus {
+    border: 2px solid $secondaryDark;
+}
+
+QPlainTextEdit#XTextEdit:disabled {
+    color: $light2;
+    border: 2px solid $dark1;
+}

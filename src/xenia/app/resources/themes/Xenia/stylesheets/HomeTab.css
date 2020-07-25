@@ -1,0 +1,40 @@
+QWidget#sidebarContainer {
+  background: $tertiary;
+  min-width: 300;
+  max-width: 300;
+}
+
+QWidget#sidebarTitle {
+  min-height: 140;
+  max-height: 140;
+}
+
+QLabel#sidebarTitleLabel {
+  color: $primary;
+  font-size: 40px;
+  font-weight: normal;
+}
+
+QLabel#sidebarSubtitleLabel {
+  color: $light2;
+  font-size: 20px;
+  font-weight: normal;
+}
+
+QWidget#XSeparator {
+  qproperty-thickness: 2;
+  min-width: 250;
+  max-width: 250;
+  background: $dark1;
+}
+
+QToolBar#XToolBar {
+  min-height: 46;
+  max-height: 46;
+}
+
+QLabel#recentGames {
+  font-family: "Segoe UI";
+  font-size: 18px;
+  color: $primary;
+}

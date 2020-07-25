@@ -1,0 +1,6 @@
+QWidget#XTabSelector {
+  qproperty-bar_color: $secondary;
+  qproperty-font_color: $primary;
+  qproperty-font_size: 24;
+  qproperty-tab_spacing: 20;
+}

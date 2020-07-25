@@ -1,0 +1,13 @@
+QToolBar::separator {
+  background: $dark1;
+  min-width: 300;
+  max-width: 300;
+  height: 2;
+}
+
+QPushButton#XSideBarButton {
+  max-height: 50;
+  min-height: 50;
+  max-width: 300;
+  min-width: 300;
+}
