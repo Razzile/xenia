@@ -25,6 +25,7 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/config.h"
+#include "xenia/ui/qt/qt_loop.h"
 
 #if XE_PLATFORM_WIN32 && QT_STATIC
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
@@ -94,9 +95,11 @@ int xenia_main(const std::vector<std::wstring>& args) {
   QApplication::setFont(QFont("Segoe UI"));
 
   // EmulatorWindow main_wnd;
-  ui::qt::MainWindow main_wnd;
-  main_wnd.setWindowIcon(QIcon(":/resources/graphics/icon.ico"));
-  main_wnd.resize(1280, 720);
+  ui::qt::QtLoop loop;
+  auto main_wnd = new ui::qt::MainWindow(&loop, L"Xenia Qt");
+  main_wnd->Initialize();
+  main_wnd->SetIcon(QIcon(":/resources/graphics/icon.ico"));
+  main_wnd->Resize(1280, 720);
 
   /*
   if (FLAGS_mount_scratch) {
@@ -167,7 +170,6 @@ int xenia_main(const std::vector<std::wstring>& args) {
   }
   */
 
-  main_wnd.show();
   // if (args.size() >= 2) {
   //  // Launch the path passed in args[1].
   //  main_wnd.Launch(args[1]);
