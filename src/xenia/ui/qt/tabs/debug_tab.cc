@@ -364,7 +364,7 @@ QWidget* DebugTab::CreateSliderGroup() {
   horizontal_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
   connect(horizontal_slider, &XSlider::valueChanged, [=](int value) {
     QString text;
-    horizontal_label->setText(text.sprintf("Value: %02d", value));
+    horizontal_label->setText(text.asprintf("Value: %02d", value));
   });
   horizontal_slider->valueChanged(0);
 
@@ -384,7 +384,7 @@ QWidget* DebugTab::CreateSliderGroup() {
   QLabel* vertical_label = new QLabel();
   connect(vertical_slider, &XSlider::valueChanged, [=](int value) {
     QString text;
-    vertical_label->setText(text.sprintf("Value: %02d", value));
+    vertical_label->setText(text.asprintf("Value: %02d", value));
   });
   vertical_slider->valueChanged(0);
 

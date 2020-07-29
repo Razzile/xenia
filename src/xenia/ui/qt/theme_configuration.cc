@@ -76,7 +76,7 @@ bool ThemeConfiguration::LoadFromFile(const QString& filename) {
 
   // Sort color macros by length to avoid similarly named colors partially
   // overriding eachother
-  qSort(colors_.begin(), colors_.end(),
+  std::sort(colors_.begin(), colors_.end(),
         [](const ThemeColor& a, const ThemeColor& b) {
           return a.first.length() > b.first.length();
         });

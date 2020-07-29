@@ -55,7 +55,6 @@ int xenia_main(const std::vector<std::wstring>& args) {
 
   // auto emulator = std::make_unique<xe::Emulator>(L"");
 
-  qputenv("QT_SCALE_FACTOR", "0.75");
 
   // Start Qt
   QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

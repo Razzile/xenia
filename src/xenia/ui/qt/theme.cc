@@ -55,7 +55,7 @@ QString Theme::PreprocessStylesheet(QString filename) {
   file.setFileName(qss_dir + filename);
 
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    return QString::null;  // TODO: better error handling
+    return QString();  // TODO: better error handling
   }
 
   QString style = file.readAll();
