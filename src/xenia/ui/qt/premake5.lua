@@ -1,4 +1,4 @@
-project_root = "../../../.."
+project_root = "../../.."
 include(project_root.."/tools/build")
 local qt = premake.extensions.qt
 
@@ -23,4 +23,4 @@ project("xenia-ui-qt")
   })
   defines({
   })
-  local_platform_files()
+  recursive_platform_files()
