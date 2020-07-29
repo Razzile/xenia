@@ -1,29 +1,32 @@
 #ifndef XENIA_UI_QT_MAINWINDOW_H_
 #define XENIA_UI_QT_MAINWINDOW_H_
 
+#include <QMainWindow>
+
+#include "window.h"
 #include "xenia/ui/qt/themeable_widget.h"
 #include "xenia/ui/qt/widgets/shell.h"
-
-#include <QMainWindow>
 
 namespace xe {
 namespace ui {
 namespace qt {
 class XStatusBar;
 
-class MainWindow : public Themeable<QMainWindow> {
+class MainWindow : public Themeable<QMainWindow>, public virtual QtWindow {
   Q_OBJECT
  public:
-  explicit MainWindow();
-
+  MainWindow(Loop* loop, const std::wstring& title)
+      : QtWindow(loop, title), Themeable<QMainWindow>("MainWindow") {
+    window_ = this;
+  }
   void AddStatusBarWidget(QWidget* widget, bool permanent = false);
   void RemoveStatusBarWidget(QWidget* widget);
 
-  QString window_title() const { return window_title_; }
   const XStatusBar* status_bar() const { return status_bar_; }
 
+  bool Initialize() override;
+
  private:
-  QString window_title_;
   XShell* shell_ = nullptr;
   XStatusBar* status_bar_ = nullptr;
 };

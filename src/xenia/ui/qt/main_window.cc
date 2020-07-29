@@ -7,15 +7,14 @@ namespace xe {
 namespace ui {
 namespace qt {
 
-MainWindow::MainWindow() : Themeable<QMainWindow>("MainWindow") {
+bool MainWindow::Initialize() {
   // Custom Frame Border
   // Disable for now until windows aero additions are added
   // setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
-
-  shell_ = new XShell(this);
+  shell_ = new XShell(window_);
   this->setCentralWidget(shell_);
 
-  status_bar_ = new XStatusBar(this);
+  status_bar_ = new XStatusBar(window_);
   this->setStatusBar(status_bar_);
 
   QLabel* build_label = new QLabel;
@@ -26,6 +25,8 @@ MainWindow::MainWindow() : Themeable<QMainWindow>("MainWindow") {
                            .arg(XE_BUILD_DATE));
   // build_label->setFont(QFont("Segoe UI", 10));
   status_bar_->addPermanentWidget(build_label);
+
+  return QtWindow::Initialize();
 }
 
 void MainWindow::AddStatusBarWidget(QWidget* widget, bool permanent) {
