@@ -12,7 +12,7 @@ namespace ui {
 namespace qt {
 class XStatusBar;
 
-class MainWindow : public Themeable<QMainWindow>, public virtual QtWindow {
+class MainWindow final : public Themeable<QMainWindow>, public virtual QtWindow {
   Q_OBJECT
  public:
   MainWindow(Loop* loop, const std::wstring& title)
@@ -25,6 +25,10 @@ class MainWindow : public Themeable<QMainWindow>, public virtual QtWindow {
   const XStatusBar* status_bar() const { return status_bar_; }
 
   bool Initialize() override;
+
+protected:
+  bool event(QEvent* event) override;
+
 
  private:
   XShell* shell_ = nullptr;

@@ -7,6 +7,9 @@
  ******************************************************************************
  */
 
+#ifndef XENIA_UI_QT_WINDOW_H_
+#define XENIA_UI_QT_WINDOW_H_
+
 #include <QMainWindow>
 
 #include "xenia/emulator.h"
@@ -50,6 +53,9 @@ class QtWindow : public ui::Window {
 
   void UpdateWindow();
 
+  void HandleKeyPress(QKeyEvent* ev);
+  void HandleKeyRelease(QKeyEvent* ev);
+
   QWindow* window_handle() const { return window_->windowHandle(); }
 
   QMainWindow* window_;
@@ -61,3 +67,5 @@ class QtWindow : public ui::Window {
 }  // namespace qt
 }  // namespace ui
 }  // namespace xe
+
+#endif // XENIA_UI_QT_WINDOW_H_

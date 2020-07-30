@@ -1,5 +1,7 @@
 #include "xenia/ui/qt/main_window.h"
+
 #include <QVBoxLayout>
+
 #include "build/version.h"
 #include "xenia/ui/qt/widgets/status_bar.h"
 
@@ -11,10 +13,13 @@ bool MainWindow::Initialize() {
   // Custom Frame Border
   // Disable for now until windows aero additions are added
   // setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
-  shell_ = new XShell(window_);
+
+  setFocusPolicy(Qt::StrongFocus);
+
+  shell_ = new XShell(this);
   this->setCentralWidget(shell_);
 
-  status_bar_ = new XStatusBar(window_);
+  status_bar_ = new XStatusBar(this);
   this->setStatusBar(status_bar_);
 
   QLabel* build_label = new QLabel;
@@ -39,6 +44,27 @@ void MainWindow::AddStatusBarWidget(QWidget* widget, bool permanent) {
 
 void MainWindow::RemoveStatusBarWidget(QWidget* widget) {
   return status_bar_->removeWidget(widget);
+}
+
+bool MainWindow::event(QEvent* event) {
+  switch (event->type()) {
+    case QEvent::KeyPress: {
+      QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
+      QtWindow::HandleKeyPress(key_event);
+
+      break;
+    }
+    case QEvent::KeyRelease: {
+      QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
+      QtWindow::HandleKeyRelease(key_event);
+
+      break;
+    }
+    default:
+      break;
+  }
+
+  return QMainWindow::event(event);
 }
 
 }  // namespace qt

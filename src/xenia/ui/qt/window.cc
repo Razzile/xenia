@@ -10,6 +10,7 @@
 #include "window.h"
 
 #include <QApplication>
+#include <QKeyEvent>
 #include <QMenuBar>
 #include <QScreen>
 #include <QWindow>
@@ -117,6 +118,40 @@ bool QtWindow::MakeReady() {
 
 void QtWindow::UpdateWindow() {
   window_->menuBar()->setEnabled(main_menu_enabled_);
+}
+
+void QtWindow::HandleKeyPress(QKeyEvent* ev) {
+  const auto& modifiers = ev->modifiers();
+
+#ifdef Q_OS_MACOS
+  auto ctrl_mod = modifiers & Qt::MetaModifier;
+  auto meta_mod = modifiers & Qt::ControlModifier;
+#else
+  const auto ctrl_mod = modifiers & Qt::ControlModifier;
+  const auto meta_mod = modifiers & Qt::MetaModifier;
+#endif
+
+  auto event = KeyEvent(this, ev->key(), ev->count(), false,
+                        modifiers & Qt::ShiftModifier, modifiers & ctrl_mod,
+                        modifiers & Qt::AltModifier, modifiers & meta_mod);
+  OnKeyDown(&event);
+}
+
+void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
+  const auto& modifiers = ev->modifiers();
+
+#ifdef Q_OS_MACOS
+  auto ctrl_mod = modifiers & Qt::MetaModifier;
+  auto meta_mod = modifiers & Qt::ControlModifier;
+#else
+  const auto ctrl_mod = modifiers & Qt::ControlModifier;
+  const auto meta_mod = modifiers & Qt::MetaModifier;
+#endif
+
+  auto event = KeyEvent(this, ev->key(), ev->count(), true,
+                        modifiers & Qt::ShiftModifier, modifiers & ctrl_mod,
+                        modifiers & Qt::AltModifier, modifiers & meta_mod);
+  OnKeyUp(&event);
 }
 
 }  // namespace qt
