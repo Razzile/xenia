@@ -126,8 +126,8 @@ void QtWindow::HandleKeyPress(QKeyEvent* ev) {
   const auto& modifiers = ev->modifiers();
 
 #ifdef Q_OS_MACOS
-  auto ctrl_mod = modifiers & Qt::MetaModifier;
-  auto meta_mod = modifiers & Qt::ControlModifier;
+  const auto ctrl_mod = modifiers & Qt::MetaModifier;
+  const auto meta_mod = modifiers & Qt::ControlModifier;
 #else
   const auto ctrl_mod = modifiers & Qt::ControlModifier;
   const auto meta_mod = modifiers & Qt::MetaModifier;
@@ -143,8 +143,8 @@ void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
   const auto& modifiers = ev->modifiers();
 
 #ifdef Q_OS_MACOS
-  auto ctrl_mod = modifiers & Qt::MetaModifier;
-  auto meta_mod = modifiers & Qt::ControlModifier;
+  const auto ctrl_mod = modifiers & Qt::MetaModifier;
+  const auto meta_mod = modifiers & Qt::ControlModifier;
 #else
   const auto ctrl_mod = modifiers & Qt::ControlModifier;
   const auto meta_mod = modifiers & Qt::MetaModifier;
