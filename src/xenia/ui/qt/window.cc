@@ -113,6 +113,8 @@ bool QtWindow::MakeReady() {
   window_->resize(width(), height());
   // TODO: Apply menu item to menu bar here.
 
+  window_->installEventFilter(this);
+
   return true;
 }
 
@@ -152,6 +154,27 @@ void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
                         modifiers & Qt::ShiftModifier, modifiers & ctrl_mod,
                         modifiers & Qt::AltModifier, modifiers & meta_mod);
   OnKeyUp(&event);
+}
+
+bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
+  switch (event->type()) {
+    case QEvent::KeyPress: {
+      const auto key_event = static_cast<QKeyEvent*>(event);
+      HandleKeyPress(key_event);
+
+      break;
+    }
+    case QEvent::KeyRelease: {
+      const auto key_event = static_cast<QKeyEvent*>(event);
+      QtWindow::HandleKeyRelease(key_event);
+
+      break;
+    }
+    default:
+      break;
+  }
+
+  return false;
 }
 
 }  // namespace qt

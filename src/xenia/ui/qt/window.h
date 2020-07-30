@@ -19,7 +19,8 @@ namespace xe {
 namespace ui {
 namespace qt {
 
-class QtWindow : public ui::Window {
+class QtWindow : public QObject, public ui::Window {
+Q_OBJECT
  public:
   QtWindow(Loop* loop, const std::wstring& title);
   NativePlatformHandle native_platform_handle() const override;
@@ -46,7 +47,7 @@ class QtWindow : public ui::Window {
   bool Initialize() override;
   void Close() override;
 
-  QWidget* window() const { return window_; }
+  QMainWindow* window() const { return window_; }
 
  protected:
   bool MakeReady() override;
@@ -55,6 +56,8 @@ class QtWindow : public ui::Window {
 
   void HandleKeyPress(QKeyEvent* ev);
   void HandleKeyRelease(QKeyEvent* ev);
+
+  bool eventFilter(QObject* watched, QEvent* event) override;
 
   QWindow* window_handle() const { return window_->windowHandle(); }
 
@@ -68,4 +71,4 @@ class QtWindow : public ui::Window {
 }  // namespace ui
 }  // namespace xe
 
-#endif // XENIA_UI_QT_WINDOW_H_
+#endif  // XENIA_UI_QT_WINDOW_H_
