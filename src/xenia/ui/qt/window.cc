@@ -172,6 +172,12 @@ void QtWindow::OnResize(UIEvent* e) {
 
 bool QtWindow::event(QEvent* event) {
   switch (event->type()) {
+    case QEvent::Close: {
+      OnClose();
+
+      break;
+    }
+
     case QEvent::Resize: {
 
       UIEvent ev(this);
