@@ -12,12 +12,11 @@ namespace ui {
 namespace qt {
 class XStatusBar;
 
-class MainWindow final : public QtWindow {
+class MainWindow final : public Themeable<QtWindow> {
   Q_OBJECT
  public:
   MainWindow(Loop* loop, const std::wstring& title)
-      : QtWindow(loop, title) {
-    window_ = new Themeable<QMainWindow>("MainWindow");
+      : Themeable<QtWindow>("MainWindow", loop, title) {
   }
 
   void AddStatusBarWidget(QWidget* widget, bool permanent = false);

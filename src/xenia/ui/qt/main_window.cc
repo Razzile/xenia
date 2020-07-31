@@ -14,14 +14,13 @@ bool MainWindow::Initialize() {
   // Disable for now until windows aero additions are added
   // setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
 
-  const auto& window = this->window();
-  window->setFocusPolicy(Qt::StrongFocus);
+  this->setFocusPolicy(Qt::StrongFocus);
 
-  shell_ = new XShell(window);
-  window->setCentralWidget(shell_);
+  shell_ = new XShell(this);
+  this->setCentralWidget(shell_);
 
-  status_bar_ = new XStatusBar(window);
-  window->setStatusBar(status_bar_);
+  status_bar_ = new XStatusBar(this);
+  this->setStatusBar(status_bar_);
 
   QLabel* build_label = new QLabel;
   build_label->setObjectName("buildLabel");

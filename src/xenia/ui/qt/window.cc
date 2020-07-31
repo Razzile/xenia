@@ -20,14 +20,14 @@ namespace ui {
 namespace qt {
 
 QtWindow::QtWindow(Loop* loop, const std::wstring& title)
-    : Window(loop, title), window_(nullptr), main_menu_enabled_(false) {}
+    : Window(loop, title), main_menu_enabled_(false) {}
 
 NativePlatformHandle QtWindow::native_platform_handle() const {
   return nullptr;
 }
 
 NativeWindowHandle QtWindow::native_handle() const {
-  return reinterpret_cast<NativeWindowHandle>(window_->winId());
+  return reinterpret_cast<NativeWindowHandle>(this->winId());
 }
 
 void QtWindow::EnableMainMenu() {
@@ -56,7 +56,7 @@ bool QtWindow::SetIcon(const void* buffer, size_t size) {
 }
 
 bool QtWindow::SetIcon(const QIcon& icon) {
-  window_->setWindowIcon(icon);
+  this->setWindowIcon(icon);
   return true;
 }
 
@@ -80,46 +80,41 @@ int QtWindow::get_dpi() const {
 
 void QtWindow::set_focus(bool value) {
   if (value) {
-    QApplication::setActiveWindow(window_);
+    QApplication::setActiveWindow(this);
   } else {
     // TODO: test this works with actual windows
-    window_->clearFocus();
+    this->clearFocus();
   }
 }
 
 void QtWindow::Resize(int32_t width, int32_t height) {
-  window_->resize(width, height);
+  this->resize(width, height);
 }
 
 void QtWindow::Resize(int32_t left, int32_t top, int32_t right,
                       int32_t bottom) {
-  window_->resize(right - left, bottom - top);
+  this->resize(right - left, bottom - top);
 }
 
 bool QtWindow::Initialize() {
-  if (!window_) {
-    window_ = new QMainWindow();
-  }
   if (MakeReady()) {
-    window_->show();
+    this->show();
     return true;
   }
   return false;
 }
 
-void QtWindow::Close() { window_->close(); }
+void QtWindow::Close() { this->close(); }
 
 bool QtWindow::MakeReady() {
-  window_->resize(width(), height());
+  this->resize(width_, height_);
   // TODO: Apply menu item to menu bar here.
-
-  window_->installEventFilter(this);
 
   return true;
 }
 
 void QtWindow::UpdateWindow() {
-  window_->menuBar()->setEnabled(main_menu_enabled_);
+  this->menuBar()->setEnabled(main_menu_enabled_);
 }
 
 void QtWindow::HandleKeyPress(QKeyEvent* ev) {
@@ -156,7 +151,7 @@ void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
   OnKeyUp(&event);
 }
 
-bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
+bool QtWindow::event(QEvent* event) {
   switch (event->type()) {
     case QEvent::KeyPress: {
       const auto key_event = static_cast<QKeyEvent*>(event);
@@ -174,7 +169,7 @@ bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
       break;
   }
 
-  return false;
+  return QMainWindow::event(event);
 }
 
 }  // namespace qt

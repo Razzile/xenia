@@ -19,7 +19,7 @@ namespace xe {
 namespace ui {
 namespace qt {
 
-class QtWindow : public QObject, public ui::Window {
+class QtWindow : public QMainWindow, public ui::Window {
 Q_OBJECT
  public:
   QtWindow(Loop* loop, const std::wstring& title);
@@ -47,8 +47,6 @@ Q_OBJECT
   bool Initialize() override;
   void Close() override;
 
-  QMainWindow* window() const { return window_; }
-
  protected:
   bool MakeReady() override;
 
@@ -57,11 +55,9 @@ Q_OBJECT
   void HandleKeyPress(QKeyEvent* ev);
   void HandleKeyRelease(QKeyEvent* ev);
 
-  bool eventFilter(QObject* watched, QEvent* event) override;
+  bool event(QEvent* event) override;
 
-  QWindow* window_handle() const { return window_->windowHandle(); }
-
-  QMainWindow* window_;
+  QWindow* window_handle() const { return windowHandle(); }
 
  private:
   bool main_menu_enabled_;
