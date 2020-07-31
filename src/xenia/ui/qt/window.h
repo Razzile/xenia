@@ -57,8 +57,6 @@ Q_OBJECT
 
   bool event(QEvent* event) override;
 
-  QWindow* window_handle() const { return windowHandle(); }
-
  private:
   bool main_menu_enabled_;
 };

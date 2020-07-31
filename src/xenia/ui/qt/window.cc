@@ -41,7 +41,7 @@ void QtWindow::DisableMainMenu() {
 }
 
 bool QtWindow::set_title(const std::wstring& title) {
-  window_handle()->setTitle(QString::fromWCharArray(title.c_str()));
+  windowHandle()->setTitle(QString::fromWCharArray(title.c_str()));
   return true;
 }
 
@@ -49,7 +49,7 @@ bool QtWindow::SetIcon(const void* buffer, size_t size) {
   auto pixmap = QPixmap();
   if (pixmap.loadFromData(static_cast<const uint8_t*>(buffer),
                           static_cast<uint32_t>(size))) {
-    window_handle()->setIcon(pixmap);
+    windowHandle()->setIcon(pixmap);
     return true;
   }
   return false;
@@ -61,7 +61,7 @@ bool QtWindow::SetIcon(const QIcon& icon) {
 }
 
 bool QtWindow::is_fullscreen() const {
-  return window_handle()->windowStates() & Qt::WindowFullScreen;
+  return windowHandle()->windowStates() & Qt::WindowFullScreen;
 }
 
 void QtWindow::ToggleFullscreen(bool fullscreen) {
@@ -69,13 +69,13 @@ void QtWindow::ToggleFullscreen(bool fullscreen) {
     return;
   }
 
-  auto win_states = window_handle()->windowStates();
+  auto win_states = windowHandle()->windowStates();
   win_states ^= Qt::WindowFullScreen;
-  window_handle()->setWindowStates(win_states);
+  windowHandle()->setWindowStates(win_states);
 }
 
 int QtWindow::get_dpi() const {
-  return window_handle()->screen()->logicalDotsPerInch();
+  return windowHandle()->screen()->logicalDotsPerInch();
 }
 
 void QtWindow::set_focus(bool value) {
