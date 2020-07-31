@@ -89,11 +89,13 @@ void QtWindow::set_focus(bool value) {
 
 void QtWindow::Resize(int32_t width, int32_t height) {
   this->resize(width, height);
+  auto e = UIEvent(this);
+  OnResize(&e);
 }
 
 void QtWindow::Resize(int32_t left, int32_t top, int32_t right,
                       int32_t bottom) {
-  this->resize(right - left, bottom - top);
+  Resize(right - left, bottom - top);
 }
 
 bool QtWindow::Initialize() {
