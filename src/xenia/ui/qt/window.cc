@@ -133,10 +133,19 @@ void QtWindow::HandleKeyPress(QKeyEvent* ev) {
   auto event = KeyEvent(this, ev->key(), ev->count(), false,
                         modifiers & Qt::ShiftModifier, modifiers & ctrl_mod,
                         modifiers & Qt::AltModifier, modifiers & meta_mod);
-  OnKeyDown(&event);
+  if (ev->isAutoRepeat()) {
+    OnKeyChar(&event);
+  } else {
+    OnKeyDown(&event);
+  }
 }
 
 void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
+  // key is being held down, don't handle event
+  if (ev->isAutoRepeat()) {
+    return;
+  }
+
   const auto& modifiers = ev->modifiers();
 
 #ifdef Q_OS_MACOS
