@@ -20,7 +20,7 @@ namespace ui {
 namespace qt {
 
 class QtWindow : public QMainWindow, public ui::Window {
-Q_OBJECT
+  Q_OBJECT
  public:
   QtWindow(Loop* loop, const std::wstring& title);
   NativePlatformHandle native_platform_handle() const override;
@@ -54,6 +54,8 @@ Q_OBJECT
 
   void HandleKeyPress(QKeyEvent* ev);
   void HandleKeyRelease(QKeyEvent* ev);
+
+  void OnResize(UIEvent* e) override;
 
   bool event(QEvent* event) override;
 

@@ -162,8 +162,24 @@ void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
   OnKeyUp(&event);
 }
 
+
+void QtWindow::OnResize(UIEvent* e) {
+  width_ = QMainWindow::width();
+  height_ = QMainWindow::height();
+
+  Window::OnResize(e);
+}
+
 bool QtWindow::event(QEvent* event) {
   switch (event->type()) {
+    case QEvent::Resize: {
+
+      UIEvent ev(this);
+      OnResize(&ev);
+
+      break;
+    }
+
     case QEvent::KeyPress: {
       const auto key_event = static_cast<QKeyEvent*>(event);
       HandleKeyPress(key_event);
@@ -172,7 +188,7 @@ bool QtWindow::event(QEvent* event) {
     }
     case QEvent::KeyRelease: {
       const auto key_event = static_cast<QKeyEvent*>(event);
-      QtWindow::HandleKeyRelease(key_event);
+      HandleKeyRelease(key_event);
 
       break;
     }
