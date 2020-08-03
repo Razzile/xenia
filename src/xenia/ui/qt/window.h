@@ -54,6 +54,8 @@ class QtWindow : public QMainWindow, public ui::Window {
 
   void HandleKeyPress(QKeyEvent* ev);
   void HandleKeyRelease(QKeyEvent* ev);
+  void HandleMouseMove(QMouseEvent* ev);
+  void HandleMouseClick(QMouseEvent* ev, bool release);
 
   void OnResize(UIEvent* e) override;
 
@@ -61,6 +63,7 @@ class QtWindow : public QMainWindow, public ui::Window {
 
  private:
   bool main_menu_enabled_;
+  QPoint last_mouse_pos_;
 };
 
 }  // namespace qt

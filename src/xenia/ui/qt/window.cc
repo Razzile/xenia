@@ -162,6 +162,39 @@ void QtWindow::HandleKeyRelease(QKeyEvent* ev) {
   OnKeyUp(&event);
 }
 
+void QtWindow::HandleMouseMove(QMouseEvent* ev) {
+  const auto dx = ev->x() - last_mouse_pos_.x();
+  const auto dy = ev->y() - last_mouse_pos_.y();
+  auto mouse_event =
+      MouseEvent(this, MouseEvent::Button::kNone, ev->x(), ev->y(), dx, dy);
+
+  last_mouse_pos_ = ev->pos();
+
+  OnMouseMove(&mouse_event);
+}
+
+void QtWindow::HandleMouseClick(QMouseEvent* ev, bool release) {
+  auto gen_button_event = [&](MouseEvent::Button btn) {
+    auto mouse_event = MouseEvent(this, btn, ev->x(), ev->y());
+    if (!release) {
+      OnMouseDown(&mouse_event);
+    } else {
+      OnMouseUp(&mouse_event);
+    }
+  };
+
+  const auto buttons = ev->buttons();
+
+  if (buttons & Qt::LeftButton) {
+    gen_button_event(MouseEvent::Button::kLeft);
+  }
+  if (buttons & Qt::RightButton) {
+    gen_button_event(MouseEvent::Button::kRight);
+  }
+  if (buttons & Qt::MiddleButton) {
+    gen_button_event(MouseEvent::Button::kMiddle);
+  }
+}
 
 void QtWindow::OnResize(UIEvent* e) {
   width_ = QMainWindow::width();
@@ -179,7 +212,6 @@ bool QtWindow::event(QEvent* event) {
     }
 
     case QEvent::Resize: {
-
       UIEvent ev(this);
       OnResize(&ev);
 
@@ -195,6 +227,24 @@ bool QtWindow::event(QEvent* event) {
     case QEvent::KeyRelease: {
       const auto key_event = static_cast<QKeyEvent*>(event);
       HandleKeyRelease(key_event);
+
+      break;
+    }
+    case QEvent::MouseMove: {
+      const auto mouse_event = static_cast<QMouseEvent*>(event);
+      HandleMouseMove(mouse_event);
+
+      break;
+    }
+    case QEvent::MouseButtonRelease: {
+      const auto mouse_event = static_cast<QMouseEvent*>(event);
+      HandleMouseClick(mouse_event, true);
+
+      break;
+    }
+    case QEvent::MouseButtonPress: {
+      const auto mouse_event = static_cast<QMouseEvent*>(event);
+      HandleMouseClick(mouse_event, false);
 
       break;
     }
