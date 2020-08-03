@@ -119,6 +119,19 @@ void QtWindow::UpdateWindow() {
   this->menuBar()->setEnabled(main_menu_enabled_);
 }
 
+void QtWindow::HandleWindowStateChange(QWindowStateChangeEvent* ev) {
+  UIEvent event(this);
+  auto old_state = ev->oldState();
+  auto state = windowState();
+
+  if ((old_state & Qt::WindowMinimized) && (state & Qt::WindowMinimized) == 0)  {
+    OnVisible(&event);
+  } else if (!(old_state & Qt::WindowMinimized) &&
+             state & Qt::WindowMinimized) {
+    OnHidden(&event);
+  }
+}
+
 void QtWindow::HandleKeyPress(QKeyEvent* ev) {
   const auto& modifiers = ev->modifiers();
 
@@ -218,6 +231,20 @@ bool QtWindow::event(QEvent* event) {
       break;
     }
 
+    case QEvent::FocusIn: {
+      UIEvent ev(this);
+      OnGotFocus(&ev);
+
+      break;
+    }
+
+    case QEvent::FocusOut: {
+      UIEvent ev(this);
+      OnLostFocus(&ev);
+
+      break;
+    }
+
     case QEvent::KeyPress: {
       const auto key_event = static_cast<QKeyEvent*>(event);
       HandleKeyPress(key_event);
@@ -230,6 +257,7 @@ bool QtWindow::event(QEvent* event) {
 
       break;
     }
+
     case QEvent::MouseMove: {
       const auto mouse_event = static_cast<QMouseEvent*>(event);
       HandleMouseMove(mouse_event);
@@ -253,6 +281,23 @@ bool QtWindow::event(QEvent* event) {
   }
 
   return QMainWindow::event(event);
+}
+
+void QtWindow::changeEvent(QEvent* event) {
+  QMainWindow::changeEvent(event);
+
+  switch (event->type()) {
+    case QEvent::WindowStateChange: {
+      const auto window_state_event =
+          static_cast<QWindowStateChangeEvent*>(event);
+      HandleWindowStateChange(window_state_event);
+
+      break;
+    }
+
+    default:
+      break;
+  }
 }
 
 }  // namespace qt

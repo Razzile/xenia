@@ -15,6 +15,8 @@
 #include "xenia/emulator.h"
 #include "xenia/ui/window.h"
 
+class QWindowStateChangeEvent;
+
 namespace xe {
 namespace ui {
 namespace qt {
@@ -52,6 +54,8 @@ class QtWindow : public QMainWindow, public ui::Window {
 
   void UpdateWindow();
 
+
+  void HandleWindowStateChange(QWindowStateChangeEvent* ev);
   void HandleKeyPress(QKeyEvent* ev);
   void HandleKeyRelease(QKeyEvent* ev);
   void HandleMouseMove(QMouseEvent* ev);
@@ -60,6 +64,7 @@ class QtWindow : public QMainWindow, public ui::Window {
   void OnResize(UIEvent* e) override;
 
   bool event(QEvent* event) override;
+  void changeEvent(QEvent*) override;
 
  private:
   bool main_menu_enabled_;
