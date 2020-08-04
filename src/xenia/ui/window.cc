@@ -155,7 +155,7 @@ void Window::Layout() {
 void Window::Invalidate() {}
 
 void Window::OnDpiChanged(UIEvent* e) {
-  // TODO(DrChat): Notify listeners.
+  ForEachListener([e](auto listener) { listener->OnDpiChanged(e); });
 }
 
 void Window::OnResize(UIEvent* e) {

@@ -26,6 +26,7 @@ class WindowListener {
   virtual void OnClosing(UIEvent* e) {}
   virtual void OnClosed(UIEvent* e) {}
 
+  virtual void OnDpiChanged(UIEvent* e) {}
   virtual void OnResize(UIEvent* e) {}
   virtual void OnLayout(UIEvent* e) {}
   virtual void OnPainting(UIEvent* e) {}

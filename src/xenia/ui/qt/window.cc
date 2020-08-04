@@ -99,8 +99,13 @@ void QtWindow::Resize(int32_t left, int32_t top, int32_t right,
 }
 
 bool QtWindow::Initialize() {
+  setAttribute(Qt::WA_NativeWindow);
+  connect(this->windowHandle(), &QWindow::screenChanged, this,
+          &QtWindow::HandleWindowScreenChange);
+
   if (MakeReady()) {
     this->show();
+    OnCreate();
     return true;
   }
   return false;
@@ -119,12 +124,18 @@ void QtWindow::UpdateWindow() {
   this->menuBar()->setEnabled(main_menu_enabled_);
 }
 
+void QtWindow::HandleWindowScreenChange(QScreen* screen) {
+  // emit this event regardless of if the new screen has the same dpi
+  UIEvent event(this);
+  OnDpiChanged(&event);
+}
+
 void QtWindow::HandleWindowStateChange(QWindowStateChangeEvent* ev) {
   UIEvent event(this);
-  auto old_state = ev->oldState();
-  auto state = windowState();
+  const auto old_state = ev->oldState();
+  const auto state = windowState();
 
-  if ((old_state & Qt::WindowMinimized) && (state & Qt::WindowMinimized) == 0)  {
+  if ((old_state & Qt::WindowMinimized) && (state & Qt::WindowMinimized) == 0) {
     OnVisible(&event);
   } else if (!(old_state & Qt::WindowMinimized) &&
              state & Qt::WindowMinimized) {
@@ -237,7 +248,6 @@ bool QtWindow::event(QEvent* event) {
 
       break;
     }
-
     case QEvent::FocusOut: {
       UIEvent ev(this);
       OnLostFocus(&ev);

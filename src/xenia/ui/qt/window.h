@@ -56,6 +56,8 @@ class QtWindow : public QMainWindow, public ui::Window {
 
 
   void HandleWindowStateChange(QWindowStateChangeEvent* ev);
+  void HandleWindowScreenChange(QScreen* screen);
+
   void HandleKeyPress(QKeyEvent* ev);
   void HandleKeyRelease(QKeyEvent* ev);
   void HandleMouseMove(QMouseEvent* ev);
