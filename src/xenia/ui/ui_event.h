@@ -10,6 +10,9 @@
 #ifndef XENIA_UI_UI_EVENT_H_
 #define XENIA_UI_UI_EVENT_H_
 
+#include <string>
+#include <vector>
+
 namespace xe {
 namespace ui {
 
@@ -28,14 +31,21 @@ class UIEvent {
 
 class FileDropEvent : public UIEvent {
  public:
-  FileDropEvent(Window* target, wchar_t* filename)
-      : UIEvent(target), filename_(filename) {}
+  FileDropEvent(Window* target, const std::wstring& filename)
+      : UIEvent(target), files_(1) {
+    files_.emplace_back(filename);
+  }
+
+  FileDropEvent(Window* target, const std::vector<std::wstring>& files)
+      : UIEvent(target), files_(files) {}
+
   ~FileDropEvent() override = default;
 
-  wchar_t* filename() const { return filename_; }
+  const std::wstring& filename() const { return files_.front(); }
+  const std::vector<std::wstring>& files() const { return files_; }
 
  private:
-  wchar_t* filename_ = nullptr;
+  std::vector<std::wstring> files_;
 };
 
 class KeyEvent : public UIEvent {
