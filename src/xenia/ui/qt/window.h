@@ -67,6 +67,8 @@ class QtWindow : public QMainWindow, public ui::Window {
 
   bool event(QEvent* event) override;
   void changeEvent(QEvent*) override;
+  void dragEnterEvent(QDragEnterEvent* event) override;
+  void dropEvent(QDropEvent* event) override;
 
  private:
   bool main_menu_enabled_;

@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QMenuBar>
+#include <QMimeData>
 #include <QScreen>
 #include <QWindow>
 
@@ -100,6 +101,8 @@ void QtWindow::Resize(int32_t left, int32_t top, int32_t right,
 
 bool QtWindow::Initialize() {
   setAttribute(Qt::WA_NativeWindow);
+  setAcceptDrops(true);
+
   connect(this->windowHandle(), &QWindow::screenChanged, this,
           &QtWindow::HandleWindowScreenChange);
 
@@ -308,6 +311,26 @@ void QtWindow::changeEvent(QEvent* event) {
     default:
       break;
   }
+}
+
+void QtWindow::dragEnterEvent(QDragEnterEvent* event) {
+  if (event->mimeData()->hasUrls()) {
+    event->acceptProposedAction();
+  }
+}
+
+void QtWindow::dropEvent(QDropEvent* event) {
+  std::vector<std::wstring> files;
+  for (const auto& url : event->mimeData()->urls()) {
+    const auto path = url.path();
+    // QString::toStdWString() is broken in debug mode
+    std::wstring file;
+    file.resize(path.size());
+    file.resize(path.toWCharArray(&file.front()));
+    files.push_back(file);
+  }
+  auto file_drop_event = FileDropEvent(this, files);
+  OnFileDrop(&file_drop_event);
 }
 
 }  // namespace qt
