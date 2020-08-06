@@ -86,10 +86,9 @@ int QtWindow::get_dpi() const {
 
 void QtWindow::set_focus(bool value) {
   if (value) {
-    QApplication::setActiveWindow(this);
+    windowHandle()->requestActivate();
   } else {
-    // TODO: test this works with actual windows
-    this->clearFocus();
+    windowHandle()->hide();
   }
 }
 
