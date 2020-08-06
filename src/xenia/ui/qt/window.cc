@@ -47,13 +47,18 @@ bool QtWindow::set_title(const std::wstring& title) {
 }
 
 bool QtWindow::SetIcon(const void* buffer, size_t size) {
-  auto pixmap = QPixmap();
-  if (pixmap.loadFromData(static_cast<const uint8_t*>(buffer),
-                          static_cast<uint32_t>(size))) {
-    windowHandle()->setIcon(pixmap);
+  if (!buffer || size == 0) {
+    windowHandle()->setIcon(QIcon());
     return true;
+  } else {
+    auto pixmap = QPixmap();
+    if (pixmap.loadFromData(static_cast<const uint8_t*>(buffer),
+                            static_cast<uint32_t>(size))) {
+      windowHandle()->setIcon(pixmap);
+      return true;
+    }
+    return false;
   }
-  return false;
 }
 
 bool QtWindow::SetIcon(const QIcon& icon) {
