@@ -710,9 +710,7 @@ bool StfsHeader::Read(const uint8_t* p) {
 
 const char* StfsContainerDevice::ReadMagic(const std::wstring& path) {
   auto map = MappedMemory::Open(path, MappedMemory::Mode::kRead, 0, 4);
-  auto magic_data = xe::load<uint32_t>(map->data());
-  auto magic_bytes = static_cast<char*>(static_cast<void*>(&magic_data));
-  return std::move(magic_bytes);
+  return reinterpret_cast<const char*>(map->data());
 }
 
 bool StfsContainerDevice::ResolveFromFolder(const std::wstring& path) {
