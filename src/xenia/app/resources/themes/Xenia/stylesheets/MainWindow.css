@@ -6,6 +6,7 @@ QLabel#buildLabel {
   color: $light2;
   padding: 0px 4px 0px 4px;
   font-size: 10px;
+  qproperty-alignment: AlignTop;
 }
 
 QMenu {

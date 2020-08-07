@@ -28,7 +28,6 @@ bool MainWindow::Initialize() {
                            .arg(XE_BUILD_BRANCH)
                            .arg(XE_BUILD_COMMIT_SHORT)
                            .arg(XE_BUILD_DATE));
-  // build_label->setFont(QFont("Segoe UI", 10));
   status_bar_->addPermanentWidget(build_label);
 
   return QtWindow::Initialize();
