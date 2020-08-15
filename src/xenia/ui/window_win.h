@@ -13,8 +13,9 @@
 #include <memory>
 #include <string>
 
-#include "xenia/ui/menu_item.h"
+#include "xenia/ui/menu.h"
 #include "xenia/ui/window.h"
+#include "xenia/base/platform_win.h"
 
 namespace xe {
 namespace ui {
@@ -30,6 +31,8 @@ class Win32Window : public Window {
   NativeWindowHandle native_handle() const override { return hwnd_; }
   HWND hwnd() const { return hwnd_; }
 
+
+  Menu* CreateMenu() override;
   void EnableMainMenu() override;
   void DisableMainMenu() override;
 
@@ -88,27 +91,6 @@ class Win32Window : public Window {
 
   void* SetProcessDpiAwareness_ = nullptr;
   void* GetDpiForMonitor_ = nullptr;
-};
-
-class Win32MenuItem : public MenuItem {
- public:
-  Win32MenuItem(Type type, const std::wstring& text, const std::wstring& hotkey,
-                std::function<void()> callback);
-  ~Win32MenuItem() override;
-
-  HMENU handle() { return handle_; }
-
-  void EnableMenuItem(Window& window) override;
-  void DisableMenuItem(Window& window) override;
-
-  using MenuItem::OnSelected;
-
- protected:
-  void OnChildAdded(MenuItem* child_item) override;
-  void OnChildRemoved(MenuItem* child_item) override;
-
- private:
-  HMENU handle_ = nullptr;
 };
 
 }  // namespace ui

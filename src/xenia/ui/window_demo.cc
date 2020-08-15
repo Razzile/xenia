@@ -43,25 +43,20 @@ int window_demo_main(const std::vector<std::wstring>& args) {
   });
 
   // Main menu.
-  auto main_menu = MenuItem::Create(MenuItem::Type::kNormal);
-  auto file_menu = MenuItem::Create(MenuItem::Type::kPopup, L"&File");
+  auto main_menu = window->CreateMenu();
+  auto file_menu = main_menu->CreateMenuItem(L"&File");
   {
-    file_menu->AddChild(MenuItem::Create(MenuItem::Type::kString, L"&Close",
-                                         L"Alt+F4",
-                                         [&window]() { window->Close(); }));
+    file_menu->CreateChild(MenuItem::Type::kString, L"&Close", L"Alt+F4",
+                           [&window]() { window->Close(); });
   }
-  main_menu->AddChild(std::move(file_menu));
-  auto debug_menu = MenuItem::Create(MenuItem::Type::kPopup, L"&Debug");
+  auto debug_menu = main_menu->CreateMenuItem(L"&Debug");
   {
-    debug_menu->AddChild(MenuItem::Create(MenuItem::Type::kString,
-                                          L"Toggle Profiler &Display", L"F3",
-                                          []() { Profiler::ToggleDisplay(); }));
-    debug_menu->AddChild(MenuItem::Create(MenuItem::Type::kString,
-                                          L"&Pause/Resume Profiler", L"`",
-                                          []() { Profiler::TogglePause(); }));
+    debug_menu->CreateChild(MenuItem::Type::kString,
+                            L"Toggle Profiler &Display", L"F3",
+                            []() { Profiler::ToggleDisplay(); });
+    debug_menu->CreateChild(MenuItem::Type::kString, L"&Pause/Resume Profiler",
+                            L"`", []() { Profiler::TogglePause(); });
   }
-  main_menu->AddChild(std::move(debug_menu));
-  window->set_main_menu(std::move(main_menu));
 
   // Initial size setting, done here so that it knows the menu exists.
   window->Resize(1920, 1200);

@@ -7,13 +7,16 @@
  ******************************************************************************
  */
 
+#include "xenia/ui/window_win.h"
+
 #include <ShellScalingApi.h>
+
 #include <string>
 
+#include "menu_win.h"
 #include "xenia/base/assert.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/platform_win.h"
-#include "xenia/ui/window_win.h"
 
 namespace xe {
 namespace ui {
@@ -181,15 +184,23 @@ void Win32Window::OnClose() {
   super::OnClose();
 }
 
+Menu* Win32Window::CreateMenu() {
+  if (!main_menu_) {
+    main_menu_ = std::make_unique<Win32Menu>(this);
+    OnMainMenuChange();
+  }
+  return main_menu_.get();
+}
+
 void Win32Window::EnableMainMenu() {
   if (main_menu_) {
-    main_menu_->EnableMenuItem(*this);
+    main_menu_->set_enabled(true);
   }
 }
 
 void Win32Window::DisableMainMenu() {
   if (main_menu_) {
-    main_menu_->DisableMenuItem(*this);
+    main_menu_->set_enabled(false);
   }
 }
 
@@ -445,7 +456,7 @@ void Win32Window::Close() {
 }
 
 void Win32Window::OnMainMenuChange() {
-  auto main_menu = reinterpret_cast<Win32MenuItem*>(main_menu_.get());
+  auto main_menu = reinterpret_cast<Win32Menu*>(main_menu_.get());
   // Don't actually set the menu if we're fullscreen. We'll do that later.
   if (main_menu && !is_fullscreen()) {
     ::SetMenu(hwnd_, main_menu->handle());
@@ -711,88 +722,6 @@ bool Win32Window::HandleKeyboard(UINT message, WPARAM wParam, LPARAM lParam) {
   }
   return e.is_handled();
 }
-
-std::unique_ptr<ui::MenuItem> MenuItem::Create(Type type,
-                                               const std::wstring& text,
-                                               const std::wstring& hotkey,
-                                               std::function<void()> callback) {
-  return std::make_unique<Win32MenuItem>(type, text, hotkey, callback);
-}
-
-Win32MenuItem::Win32MenuItem(Type type, const std::wstring& text,
-                             const std::wstring& hotkey,
-                             std::function<void()> callback)
-    : MenuItem(type, text, hotkey, std::move(callback)) {
-  switch (type) {
-    case MenuItem::Type::kNormal:
-      handle_ = CreateMenu();
-      break;
-    case MenuItem::Type::kPopup:
-      handle_ = CreatePopupMenu();
-      break;
-    default:
-      // May just be a placeholder.
-      break;
-  }
-  if (handle_) {
-    MENUINFO menu_info = {0};
-    menu_info.cbSize = sizeof(menu_info);
-    menu_info.fMask = MIM_MENUDATA | MIM_STYLE;
-    menu_info.dwMenuData = ULONG_PTR(this);
-    menu_info.dwStyle = MNS_NOTIFYBYPOS;
-    SetMenuInfo(handle_, &menu_info);
-  }
-}
-
-Win32MenuItem::~Win32MenuItem() {
-  if (handle_) {
-    DestroyMenu(handle_);
-  }
-}
-
-void Win32MenuItem::EnableMenuItem(Window& window) {
-  int i = 0;
-  for (auto iter = children_.begin(); iter != children_.end(); ++iter, i++) {
-    ::EnableMenuItem(handle_, i, MF_BYPOSITION | MF_ENABLED);
-  }
-  DrawMenuBar((HWND)window.native_handle());
-}
-
-void Win32MenuItem::DisableMenuItem(Window& window) {
-  int i = 0;
-  for (auto iter = children_.begin(); iter != children_.end(); ++iter, i++) {
-    ::EnableMenuItem(handle_, i, MF_BYPOSITION | MF_GRAYED);
-  }
-  DrawMenuBar((HWND)window.native_handle());
-}
-
-void Win32MenuItem::OnChildAdded(MenuItem* generic_child_item) {
-  auto child_item = static_cast<Win32MenuItem*>(generic_child_item);
-
-  switch (child_item->type()) {
-    case MenuItem::Type::kNormal:
-      // Nothing special.
-      break;
-    case MenuItem::Type::kPopup:
-      AppendMenuW(handle_, MF_POPUP,
-                  reinterpret_cast<UINT_PTR>(child_item->handle()),
-                  child_item->text().c_str());
-      break;
-    case MenuItem::Type::kSeparator:
-      AppendMenuW(handle_, MF_SEPARATOR, UINT_PTR(child_item->handle_), 0);
-      break;
-    case MenuItem::Type::kString:
-      auto full_name = child_item->text();
-      if (!child_item->hotkey().empty()) {
-        full_name += L"\t" + child_item->hotkey();
-      }
-      AppendMenuW(handle_, MF_STRING, UINT_PTR(child_item->handle_),
-                  full_name.c_str());
-      break;
-  }
-}
-
-void Win32MenuItem::OnChildRemoved(MenuItem* generic_child_item) {}
 
 }  // namespace ui
 }  // namespace xe
