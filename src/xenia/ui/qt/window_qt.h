@@ -40,6 +40,9 @@ class QtWindow : public QMainWindow, public ui::Window {
   bool is_fullscreen() const override;
   void ToggleFullscreen(bool fullscreen) override;
 
+  bool is_bordered() const override;
+  void set_bordered(bool enabled) override;
+
   int get_dpi() const override;
 
   void set_focus(bool value) override;

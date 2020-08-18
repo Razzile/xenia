@@ -16,7 +16,6 @@
 #include <QScreen>
 #include <QWindow>
 
-
 #include "menu_qt.h"
 #include "xenia/base/logging.h"
 
@@ -34,7 +33,6 @@ NativePlatformHandle QtWindow::native_platform_handle() const {
 NativeWindowHandle QtWindow::native_handle() const {
   return reinterpret_cast<NativeWindowHandle>(this->winId());
 }
-
 
 Menu* QtWindow::CreateMenu() {
   if (!main_menu_) {
@@ -93,6 +91,26 @@ void QtWindow::ToggleFullscreen(bool fullscreen) {
   windowHandle()->setWindowStates(win_states);
 }
 
+bool QtWindow::is_bordered() const {
+  auto flags = windowFlags();
+  return flags & ~Qt::FramelessWindowHint || flags & ~Qt::CustomizeWindowHint;
+}
+
+void QtWindow::set_bordered(bool enabled) {
+  if (enabled == is_bordered()) {
+    return;
+  }
+
+  // need to hide window before modifying window flags
+  hide();
+  if (!enabled) {
+    setWindowFlags(windowFlags() | Qt::Window | Qt::FramelessWindowHint);
+  } else {
+    setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint | Qt::Window);
+  }
+  show();
+}
+
 int QtWindow::get_dpi() const {
   return windowHandle()->screen()->logicalDotsPerInch();
 }
@@ -137,16 +155,6 @@ bool QtWindow::MakeReady() {
   this->resize(width_, height_);
 
   const auto menu_root_item = main_menu_.get();
-
- /* const auto& children = menu_root_item->children();
-  std::for_each(
-      children.begin(), children.end(), [&](const MenuItem::MenuItemPtr& item) {
-        QMenu* menu = new QMenu(QString::fromWCharArray(item->text().c_str()));
-        ApplyMenuItem(item.get(), menu);
-        menuBar()->addMenu(menu);
-      });
-
-  menuBar()->show();*/
 
   return true;
 }
@@ -250,44 +258,6 @@ void QtWindow::HandleMouseClick(QMouseEvent* ev, bool release) {
     gen_button_event(MouseEvent::Button::kMiddle);
   }
 }
-
-//void QtWindow::ApplyMenuItem(MenuItem* item, QMenu* target_menu) {
-//  switch (item->type()) {
-//    case MenuItem::Type::kSubmenu: {
-//      QMenu* submenu = new QMenu(QString::fromWCharArray(item->text().c_str()));
-//
-//      for (const auto& child : item->children()) {
-//        ApplyMenuItem(child.get(), target_menu);
-//      }
-//      break;
-//    }
-//
-//    case MenuItem::Type::kSeparator: {
-//      target_menu->addSeparator();
-//      break;
-//    }
-//
-//    case MenuItem::Type::kRoot: {
-//      for (const auto& child : item->children()) {
-//        ApplyMenuItem(child.get(), target_menu);
-//      }
-//      break;
-//    }
-//
-//    case MenuItem::Type::kString: {
-//      target_menu->addAction(QString::fromWCharArray(item->text().c_str()),
-//                             [item]() {
-//                               auto& callback = item->callback();
-//                               if (callback) {
-//                                 callback();
-//                               }
-//                               XELOGD("Close clicked");
-//                             });
-//
-//      break;
-//    }
-//  }
-//}
 
 void QtWindow::OnResize(UIEvent* e) {
   width_ = QMainWindow::width();
