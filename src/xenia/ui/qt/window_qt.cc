@@ -123,6 +123,14 @@ void QtWindow::set_focus(bool value) {
   }
 }
 
+void QtWindow::set_cursor_visible(bool value) {
+  if (value) {
+    setCursor(Qt::ArrowCursor);
+  } else {
+    setCursor(Qt::BlankCursor);
+  }
+}
+
 void QtWindow::Resize(int32_t width, int32_t height) {
   this->resize(width, height);
   auto e = UIEvent(this);

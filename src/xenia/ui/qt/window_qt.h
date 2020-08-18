@@ -46,6 +46,7 @@ class QtWindow : public QMainWindow, public ui::Window {
   int get_dpi() const override;
 
   void set_focus(bool value) override;
+  void set_cursor_visible(bool value) override;
 
   void Resize(int32_t width, int32_t height) override;
   void Resize(int32_t left, int32_t top, int32_t right,
