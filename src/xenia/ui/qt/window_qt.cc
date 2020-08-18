@@ -7,7 +7,7 @@
  ******************************************************************************
  */
 
-#include "window.h"
+#include "window_qt.h"
 
 #include <QApplication>
 #include <QKeyEvent>
@@ -15,6 +15,10 @@
 #include <QMimeData>
 #include <QScreen>
 #include <QWindow>
+
+
+#include "menu_qt.h"
+#include "xenia/base/logging.h"
 
 namespace xe {
 namespace ui {
@@ -29,6 +33,15 @@ NativePlatformHandle QtWindow::native_platform_handle() const {
 
 NativeWindowHandle QtWindow::native_handle() const {
   return reinterpret_cast<NativeWindowHandle>(this->winId());
+}
+
+
+Menu* QtWindow::CreateMenu() {
+  if (!main_menu_) {
+    main_menu_ = std::make_unique<QtMenu>(this);
+    OnMainMenuChange();
+  }
+  return main_menu_.get();
 }
 
 void QtWindow::EnableMainMenu() {
@@ -122,7 +135,18 @@ void QtWindow::Close() { this->close(); }
 
 bool QtWindow::MakeReady() {
   this->resize(width_, height_);
-  // TODO: Apply menu item to menu bar here.
+
+  const auto menu_root_item = main_menu_.get();
+
+ /* const auto& children = menu_root_item->children();
+  std::for_each(
+      children.begin(), children.end(), [&](const MenuItem::MenuItemPtr& item) {
+        QMenu* menu = new QMenu(QString::fromWCharArray(item->text().c_str()));
+        ApplyMenuItem(item.get(), menu);
+        menuBar()->addMenu(menu);
+      });
+
+  menuBar()->show();*/
 
   return true;
 }
@@ -226,6 +250,44 @@ void QtWindow::HandleMouseClick(QMouseEvent* ev, bool release) {
     gen_button_event(MouseEvent::Button::kMiddle);
   }
 }
+
+//void QtWindow::ApplyMenuItem(MenuItem* item, QMenu* target_menu) {
+//  switch (item->type()) {
+//    case MenuItem::Type::kSubmenu: {
+//      QMenu* submenu = new QMenu(QString::fromWCharArray(item->text().c_str()));
+//
+//      for (const auto& child : item->children()) {
+//        ApplyMenuItem(child.get(), target_menu);
+//      }
+//      break;
+//    }
+//
+//    case MenuItem::Type::kSeparator: {
+//      target_menu->addSeparator();
+//      break;
+//    }
+//
+//    case MenuItem::Type::kRoot: {
+//      for (const auto& child : item->children()) {
+//        ApplyMenuItem(child.get(), target_menu);
+//      }
+//      break;
+//    }
+//
+//    case MenuItem::Type::kString: {
+//      target_menu->addAction(QString::fromWCharArray(item->text().c_str()),
+//                             [item]() {
+//                               auto& callback = item->callback();
+//                               if (callback) {
+//                                 callback();
+//                               }
+//                               XELOGD("Close clicked");
+//                             });
+//
+//      break;
+//    }
+//  }
+//}
 
 void QtWindow::OnResize(UIEvent* e) {
   width_ = QMainWindow::width();

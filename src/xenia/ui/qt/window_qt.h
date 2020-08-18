@@ -7,8 +7,8 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_UI_QT_WINDOW_H_
-#define XENIA_UI_QT_WINDOW_H_
+#ifndef XENIA_UI_QT_WINDOW_QT_H_
+#define XENIA_UI_QT_WINDOW_QT_H_
 
 #include <QMainWindow>
 
@@ -28,6 +28,8 @@ class QtWindow : public QMainWindow, public ui::Window {
   NativePlatformHandle native_platform_handle() const override;
   NativeWindowHandle native_handle() const override;
 
+
+  Menu* CreateMenu() override;
   void EnableMainMenu() override;
   void DisableMainMenu() override;
 
@@ -53,7 +55,6 @@ class QtWindow : public QMainWindow, public ui::Window {
   bool MakeReady() override;
 
   void UpdateWindow();
-
 
   void HandleWindowStateChange(QWindowStateChangeEvent* ev);
   void HandleWindowScreenChange(QScreen* screen);

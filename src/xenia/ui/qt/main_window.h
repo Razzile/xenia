@@ -3,7 +3,7 @@
 
 #include <QMainWindow>
 
-#include "window.h"
+#include "window_qt.h"
 #include "xenia/ui/qt/themeable_widget.h"
 #include "xenia/ui/qt/widgets/shell.h"
 
@@ -16,15 +16,14 @@ class MainWindow final : public Themeable<QtWindow> {
   Q_OBJECT
  public:
   MainWindow(Loop* loop, const std::wstring& title)
-      : Themeable<QtWindow>("MainWindow", loop, title) {
-  }
+      : Themeable<QtWindow>("MainWindow", loop, title) {}
+
+  bool Initialize() override;
 
   void AddStatusBarWidget(QWidget* widget, bool permanent = false);
   void RemoveStatusBarWidget(QWidget* widget);
 
   const XStatusBar* status_bar() const { return status_bar_; }
-
-  bool Initialize() override;
 
  private:
   XShell* shell_ = nullptr;
