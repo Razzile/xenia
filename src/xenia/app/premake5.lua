@@ -118,7 +118,7 @@ project("xenia-app")
   end
 
  filter("platforms:Windows")
-  entrypoint("mainCRTStartup")
+  entrypoint("wWinMainCRTStartup")
 
   defines({
     "XBYAK_NO_OP_NAMES",
