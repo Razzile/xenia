@@ -63,6 +63,8 @@ int xenia_main(const std::vector<std::wstring>& args) {
   QCoreApplication::setOrganizationName(
       "Xenia Xbox 360 Emulator Research Project");
   QCoreApplication::setOrganizationDomain("https://xenia.jp");
+  QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+      Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
   std::wstring storage_root = xe::to_wstring(cvars::storage_root);
   if (storage_root.empty()) {

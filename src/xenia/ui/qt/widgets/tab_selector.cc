@@ -1,7 +1,7 @@
 #include "xenia/ui/qt/widgets/tab_selector.h"
 
 #include <QPainter>
-#include <QPixmap>
+#include <QPainterPath>
 #include <QPropertyAnimation>
 
 namespace xe {

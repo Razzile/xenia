@@ -16,7 +16,7 @@
 #include "xenia/base/delegate.h"
 #include "xenia/ui/graphics_context.h"
 #include "xenia/ui/loop.h"
-#include "xenia/ui/menu_item.h"
+#include "xenia/ui/menu.h"
 #include "xenia/ui/ui_event.h"
 #include "xenia/ui/window_listener.h"
 
@@ -38,11 +38,8 @@ class Window {
   virtual NativePlatformHandle native_platform_handle() const = 0;
   virtual NativeWindowHandle native_handle() const = 0;
 
-  MenuItem* main_menu() const { return main_menu_.get(); }
-  void set_main_menu(std::unique_ptr<MenuItem> main_menu) {
-    main_menu_ = std::move(main_menu);
-    OnMainMenuChange();
-  }
+  Menu* main_menu() const { return main_menu_.get(); }
+  virtual Menu* CreateMenu() = 0;
 
   virtual void EnableMainMenu() = 0;
   virtual void DisableMainMenu() = 0;
@@ -167,7 +164,7 @@ class Window {
   void OnKeyPress(KeyEvent* e, bool is_down, bool is_char);
 
   Loop* loop_ = nullptr;
-  std::unique_ptr<MenuItem> main_menu_;
+  std::unique_ptr<Menu> main_menu_;
   std::wstring title_;
   int32_t width_ = 0;
   int32_t height_ = 0;

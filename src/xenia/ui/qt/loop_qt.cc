@@ -7,13 +7,14 @@
  ******************************************************************************
  */
 
-#include "qt_loop.h"
+#include "loop_qt.h"
 
 #include <QApplication>
 #include <QThread>
 #include <QTimer>
 
 #include "xenia/base/assert.h"
+#include "xenia/base/threading.h"
 
 namespace xe {
 namespace ui {
@@ -24,6 +25,11 @@ namespace qt {
 
 bool QtLoop::is_on_loop_thread() {
   return QThread::currentThread() == QApplication::instance()->thread();
+}
+
+QtLoop::QtLoop() : has_quit_(false) {
+  QObject::connect(qApp, &QCoreApplication::aboutToQuit,
+                   [this]() { has_quit_ = true; });
 }
 
 void QtLoop::Post(std::function<void()> fn) { PostDelayed(fn, 0); }
@@ -45,13 +51,16 @@ void QtLoop::PostDelayed(std::function<void()> fn, uint64_t delay_millis) {
 }
 
 void QtLoop::Quit() {
-  // As QtLoop uses Qt's internal event loop, we shouldn't kill it
-  assert_always();
+  QMetaObject::invokeMethod(qApp, "quit", Qt::QueuedConnection);
 }
 
 void QtLoop::AwaitQuit() {
-  // As QtLoop uses Qt's internal event loop, it can't be killed
-  assert_always();
+  if (has_quit_) return;
+
+  xe::threading::Fence fence;
+  QObject::connect(qApp, &QCoreApplication::aboutToQuit,
+                   [&fence]() { fence.Signal(); });
+  fence.Wait();
 }
 
 }  // namespace qt

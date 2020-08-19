@@ -19,7 +19,7 @@
 #include "xenia/cpu/processor.h"
 #include "xenia/emulator.h"
 #include "xenia/ui/loop.h"
-#include "xenia/ui/menu_item.h"
+#include "xenia/ui/menu.h"
 #include "xenia/ui/window.h"
 #include "xenia/xbox.h"
 

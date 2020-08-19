@@ -1,4 +1,4 @@
-project_root = "../../.."
+project_root = "../../../.."
 include(project_root.."/tools/build")
 local qt = premake.extensions.qt
 

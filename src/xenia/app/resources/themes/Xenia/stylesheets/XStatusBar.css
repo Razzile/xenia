@@ -1,4 +1,8 @@
 QStatusBar#XStatusBar {
-  background: rgb(40, 40, 40);
+  background-color: rgb(40, 40, 40);
   color: $light2;
+}
+
+QStatusBar#XStatusBar::item { 
+  border: 0px;
 }

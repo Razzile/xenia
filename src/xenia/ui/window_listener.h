@@ -26,12 +26,13 @@ class WindowListener {
   virtual void OnClosing(UIEvent* e) {}
   virtual void OnClosed(UIEvent* e) {}
 
+  virtual void OnDpiChanged(UIEvent* e) {}
   virtual void OnResize(UIEvent* e) {}
   virtual void OnLayout(UIEvent* e) {}
   virtual void OnPainting(UIEvent* e) {}
   virtual void OnPaint(UIEvent* e) {}
   virtual void OnPainted(UIEvent* e) {}
-  virtual void OnFileDrop(UIEvent* e) {}
+  virtual void OnFileDrop(FileDropEvent* e) {}
 
   virtual void OnVisible(UIEvent* e) {}
   virtual void OnHidden(UIEvent* e) {}

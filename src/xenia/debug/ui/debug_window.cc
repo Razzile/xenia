@@ -90,15 +90,12 @@ bool DebugWindow::Initialize() {
   loop_->on_quit.AddListener([this](UIEvent* e) { window_.reset(); });
 
   // Main menu.
-  auto main_menu = MenuItem::Create(MenuItem::Type::kNormal);
-  auto file_menu = MenuItem::Create(MenuItem::Type::kPopup, L"&File");
+  auto main_menu = window_->CreateMenu();
+  auto file_menu = main_menu->CreateMenuItem(L"&File");
   {
-    file_menu->AddChild(MenuItem::Create(MenuItem::Type::kString, L"&Close",
-                                         L"Alt+F4",
-                                         [this]() { window_->Close(); }));
+    file_menu->CreateChild(MenuItem::Type::kString, L"&Close", L"Alt+F4",
+                           [this]() { window_->Close(); });
   }
-  main_menu->AddChild(std::move(file_menu));
-  window_->set_main_menu(std::move(main_menu));
 
   window_->Resize(1500, 1000);
 
