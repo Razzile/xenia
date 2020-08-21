@@ -8,16 +8,13 @@
  */
 
 #include "xenia/app/emulator_window.h"
-#include "xenia/apu/xaudio2/xaudio2_audio_system.h"
-#include "xenia/base/cvar.h"
-#include "xenia/gpu/vulkan/vulkan_graphics_system.h"
-#include "xenia/ui/vulkan/vulkan_instance.h"
-#include "xenia/ui/vulkan/vulkan_provider.h"
 
 #include <QVulkanWindow>
 
 #include "third_party/imgui/imgui.h"
+#include "xenia/apu/xaudio2/xaudio2_audio_system.h"
 #include "xenia/base/clock.h"
+#include "xenia/base/cvar.h"
 #include "xenia/base/debugging.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/platform.h"
@@ -25,6 +22,11 @@
 #include "xenia/base/threading.h"
 #include "xenia/emulator.h"
 #include "xenia/gpu/graphics_system.h"
+#include "xenia/gpu/vulkan/vulkan_graphics_system.h"
+#include "xenia/hid/input_system.h"
+#include "xenia/hid/xinput/xinput_hid.h"
+#include "xenia/ui/vulkan/vulkan_instance.h"
+#include "xenia/ui/vulkan/vulkan_provider.h"
 
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, xaudio2]", "General");
 DEFINE_string(gpu, "any", "Graphics system. Use: [any, vulkan, null]",
@@ -107,7 +109,8 @@ QVulkanWindowRenderer* VulkanWindow::createRenderer() {
   return new VulkanRenderer(this, graphics_system_);
 }
 
-EmulatorWindow::EmulatorWindow() {
+EmulatorWindow::EmulatorWindow(Loop* loop, const std::wstring& title)
+    : QtWindow(loop, title) {
   // TODO(DrChat): Pass in command line arguments.
   emulator_ = std::make_unique<xe::Emulator>(L"", L"");
 
@@ -135,7 +138,16 @@ EmulatorWindow::EmulatorWindow() {
     return graphics;
   };
 
-  X_STATUS result = emulator_->Setup(audio_factory, graphics_factory, nullptr);
+  auto input_factory = [&](ui::Window* window) {
+    std::vector<std::unique_ptr<hid::InputDriver>> drivers;
+    auto xinput_driver = hid::xinput::Create(window);
+    xinput_driver->Setup();
+    drivers.push_back(std::move(xinput_driver));
+
+    return drivers;
+  };
+
+  X_STATUS result = emulator_->Setup(this, audio_factory, graphics_factory, input_factory);
   if (result == X_STATUS_SUCCESS) {
     // Setup a callback called when the emulator wants to swap.
     emulator_->graphics_system()->SetSwapCallback([&]() {

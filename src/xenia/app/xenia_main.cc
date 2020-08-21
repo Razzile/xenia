@@ -25,7 +25,7 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/config.h"
-#include "xenia/ui/qt/qt_loop.h"
+#include "xenia/ui/qt/loop_qt.h"
 
 #if XE_PLATFORM_WIN32 && QT_STATIC
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
@@ -177,6 +177,7 @@ int xenia_main(const std::vector<std::wstring>& args) {
   //}
 
   int rc = app.exec();
+  loop.AwaitQuit();
 
   /*Profiler::Dump();
   Profiler::Shutdown();*/

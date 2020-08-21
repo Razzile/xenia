@@ -111,14 +111,14 @@ class Emulator {
   // to create subsystems as required.
   // Once this function returns a game can be launched using one of the Launch
   // functions.
-  X_STATUS Setup(
+  X_STATUS Setup(ui::Window* display_window,
       std::function<std::unique_ptr<apu::AudioSystem>(cpu::Processor*,
                                                       kernel::KernelState*)>
           audio_system_factory,
       std::function<std::unique_ptr<gpu::GraphicsSystem>(cpu::Processor*,
                                                          kernel::KernelState*)>
           graphics_system_factory,
-      std::function<std::vector<std::unique_ptr<hid::InputDriver>>()>
+      std::function<std::vector<std::unique_ptr<hid::InputDriver>>(ui::Window*)>
           input_driver_factory);
 
   // Terminates the currently running title.

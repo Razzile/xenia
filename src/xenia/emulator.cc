@@ -81,14 +81,14 @@ Emulator::~Emulator() {
   ExceptionHandler::Uninstall(Emulator::ExceptionCallbackThunk, this);
 }
 
-X_STATUS Emulator::Setup(
+X_STATUS Emulator::Setup(ui::Window* display_window,
     std::function<std::unique_ptr<apu::AudioSystem>(cpu::Processor*,
                                                     kernel::KernelState*)>
         audio_system_factory,
     std::function<std::unique_ptr<gpu::GraphicsSystem>(cpu::Processor*,
                                                        kernel::KernelState*)>
         graphics_system_factory,
-    std::function<std::vector<std::unique_ptr<hid::InputDriver>>()>
+    std::function<std::vector<std::unique_ptr<hid::InputDriver>>(ui::Window*)>
         input_driver_factory) {
   X_STATUS result = X_STATUS_UNSUCCESSFUL;
 
@@ -158,12 +158,12 @@ X_STATUS Emulator::Setup(
   }
 
   // Initialize all HID drivers.
-  input_system_ = std::make_unique<xe::hid::InputSystem>();
+  input_system_ = std::make_unique<xe::hid::InputSystem>(display_window);
   if (!input_system_) {
     return X_STATUS_NOT_IMPLEMENTED;
   }
   if (input_driver_factory) {
-    auto input_drivers = input_driver_factory();
+    auto input_drivers = input_driver_factory(display_window);
     for (size_t i = 0; i < input_drivers.size(); ++i) {
       input_system_->AddDriver(std::move(input_drivers[i]));
     }

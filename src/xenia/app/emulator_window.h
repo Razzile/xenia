@@ -17,6 +17,8 @@
 #include "xenia/emulator.h"
 #include "xenia/ui/graphics_context.h"
 #include "xenia/ui/graphics_provider.h"
+#include "xenia/ui/qt/window_qt.h"
+#include "xenia/ui/qt/loop_qt.h"
 
 namespace xe {
 namespace app {
@@ -24,11 +26,14 @@ namespace app {
 class VulkanWindow;
 class VulkanRenderer;
 
-class EmulatorWindow : public QMainWindow {
+using ui::qt::QtWindow;
+using ui::Loop;
+
+class EmulatorWindow : public ui::qt::QtWindow {
   Q_OBJECT
 
  public:
-  EmulatorWindow();
+  EmulatorWindow(Loop *loop, const std::wstring& title);
 
   bool Launch(const std::wstring& path);
 
@@ -48,6 +53,7 @@ class EmulatorWindow : public QMainWindow {
 
   std::unique_ptr<QWindow> graphics_window_;
   std::unique_ptr<ui::GraphicsProvider> graphics_provider_;
+  std::unique_ptr<hid::InputSystem> input_system_;
 
   std::unique_ptr<QVulkanInstance> vulkan_instance_;
 };
