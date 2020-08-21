@@ -12,7 +12,8 @@
 namespace xe {
 namespace hid {
 
-InputDriver::InputDriver() = default;
+InputDriver::InputDriver(xe::ui::Window* window) : window_(window) {}
+
 InputDriver::~InputDriver() = default;
 
 }  // namespace hid

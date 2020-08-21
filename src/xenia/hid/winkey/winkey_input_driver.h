@@ -16,10 +16,6 @@
 #include "xenia/hid/input_driver.h"
 
 namespace xe {
-namespace ui {
-class Window;
-}  // namespace ui
-
 namespace hid {
 namespace winkey {
 
@@ -45,7 +41,6 @@ class WinKeyInputDriver : public InputDriver {
     bool prev_state = false;  // down(true) or up(false)
   };
 
-  xe::ui::Window* window_ = nullptr;
   xe::global_critical_region global_critical_region_;
   std::queue<KeyEvent> key_events_;
 
