@@ -161,15 +161,22 @@ void HomeTab::PlayTriggered() {
   // This is purely a proof of concept
   auto index = list_view_->selectionModel();
   if (index->hasSelection()) {
-    QModelIndexList row =
+    QModelIndexList path_row =
         index->selectedRows(static_cast<int>(GameColumn::kPathColumn));
-    const QModelIndex& model_index = row.at(0);
 
-    QString path = model_index.data().toString();
+    const QModelIndex& path_index = path_row.at(0);
 
-    app::EmulatorWindow* wnd = new app::EmulatorWindow();
-    wnd->resize(1280, 720);
-    wnd->show();
+    QString path = path_index.data().toString();
+
+    /*wchar_t* title_w = new wchar_t[title.length() + 1];
+    title.toWCharArray(title_w);
+    title_w[title.length()] = '\0';*/
+
+    auto win = qobject_cast<QtWindow*>(window());
+    app::EmulatorWindow* wnd = new app::EmulatorWindow(win->loop(), L"");
+    /*wnd->resize(1280, 720);
+    wnd->show();*/
+    win->setCentralWidget(wnd);
 
     // this manual conversion seems to be required as Qt's std::(w)string impl
     // and the one i've been linking to seem incompatible
